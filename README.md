@@ -1,3 +1,5 @@
+![Ilona Bila · n8n & AI Automation: 7 AI systems, built end to end](assets/github-social-preview.png)
+
 # Ilona Bila: n8n & AI Automation Portfolio
 
 **n8n & AI Automation Specialist · RAG · Multi-Agent Systems · GDPR-Compliant Design**
