@@ -6,7 +6,7 @@
 
 📖 [Case studies on Notion](https://ilona-bila-portfolio.notion.site/Portfolio-36e9e4dcbceb81baaf15cd1c34d83d11) · 💼 [Upwork profile](https://www.upwork.com/freelancers/~01185d5a4ab8156523)
 
-This repository holds the **real n8n workflow files** behind the case studies, each with a README explaining the architecture, design decisions, error handling and setup. Every workflow can be imported into n8n.
+This repository holds the **real n8n workflows** behind my case studies. Each project has a README that walks through the architecture, the key design decisions and how the system handles errors and edge cases.
 
 ---
 
@@ -40,10 +40,6 @@ This repository holds the **real n8n workflow files** behind the case studies, e
 
 ---
 
-## Using these workflows
+## About the files
 
-1. In n8n, go to **Workflows → Import from file** and choose a `.json` file.
-2. Create your own credentials (each project's README lists which ones).
-3. Replace placeholders such as `YOUR_GOOGLE_SHEET_ID_1`, `YOUR_TELEGRAM_CHAT_ID` and `you@example.com`.
-
-The files are sanitized exports: no API keys, personal IDs or test data. Most prompts and some node names are in Russian, and each README is in English.
+The workflow files are the original n8n exports, with API keys, personal IDs and test data removed. Most prompts and some node names are in Russian, and every README is in English.
