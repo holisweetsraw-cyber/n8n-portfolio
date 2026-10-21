@@ -1,4 +1,4 @@
-![Ilona Bila · n8n & AI Automation: 7 AI systems, built end to end](assets/github-social-preview.png)
+![Ilona Bila · n8n & AI Automation: AI systems, built end to end](assets/github-social-preview.png)
 
 # Ilona Bila: n8n & AI Automation Portfolio
 
