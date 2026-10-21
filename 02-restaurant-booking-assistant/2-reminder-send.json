@@ -1,0 +1,851 @@
+{
+  "name": "Basilik — Workflow 2 (Reminder-Send) subworkflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "basilik-reminder-trigger",
+        "options": {}
+      },
+      "id": "b7dc75c3-c5e6-4264-b84d-b928f39a36c5",
+      "name": "Webhook: приём триггера напоминания",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        432
+      ],
+      "webhookId": "6df90cbf-ead0-4737-bdbc-a0c999ea1a7a"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_2",
+          "mode": "list",
+          "cachedResultName": "Basilik DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "bookings",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "booking_id",
+              "lookupValue": "={{ $json.booking_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "40bd2a90-700a-492c-9f7a-51a5aa4e2fec",
+      "name": "Google Sheets: получить бронь",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        240,
+        432
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $input.item.json;\nconst visitDateTime = new Date(`${b.date}T${b.time}:00+02:00`);\nconst remindAt = new Date(visitDateTime.getTime() - 2 * 3600000);\nreturn [{ json: { ...b, remind_at: remindAt.toISOString() } }];"
+      },
+      "id": "a9bdd677-82cb-48d7-a003-fc7199a253c5",
+      "name": "Code: расчёт времени напоминания",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $json.remind_at }}"
+      },
+      "id": "1f8ea336-a1a9-4ce2-96e6-d6dee4d924d5",
+      "name": "Wait: до времени напоминания",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        688,
+        432
+      ],
+      "webhookId": "7249d831-f3fd-4a75-8762-3b32dd89f8e9"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_2",
+          "mode": "list",
+          "cachedResultName": "Basilik DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "bookings",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "booking_id",
+              "lookupValue": "={{ $json.booking_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e57ab9e6-9a20-43e9-a35f-d1dfb2492732",
+      "name": "Google Sheets: перепроверить бронь",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        944,
+        432
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "confirmed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "id": "ae554d17-8f93-44e7-9861-ba135b2e3765"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9af788c7-4538-4372-84f5-55c89c79a94f",
+      "name": "If: бронь всё ещё активна?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "chatId": "={{ $json.chat_id }}",
+        "message": "=Здравствуйте! Напоминаем о брони в Базилике на {{ $json.date }} в {{ $json.time }} ({{ $json.party_size }} гостей). Подтвердите, пожалуйста, визит.",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double",
+            "approveLabel": "✅ Подтверждаю",
+            "disapproveLabel": "❌ Отменяю"
+          }
+        },
+        "options": {}
+      },
+      "id": "f245cb37-1e91-419e-975f-2a79d12125ad",
+      "name": "Telegram: отправить напоминание (кнопки)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1360,
+        304
+      ],
+      "webhookId": "f06e9802-4bb2-44c8-98de-769c1637c379",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_2",
+          "mode": "list",
+          "cachedResultName": "Basilik DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "bookings"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "booking_id": "={{ $('Google Sheets: перепроверить бронь').item.json.booking_id }}",
+            "reminder_sent": true,
+            "updated_at": "={{ $now.toISO() }}",
+            "row_number": 0
+          },
+          "matchingColumns": [
+            "booking_id"
+          ],
+          "schema": [
+            {
+              "id": "booking_id",
+              "displayName": "booking_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ref_token",
+              "displayName": "ref_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "time",
+              "displayName": "time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "party_size",
+              "displayName": "party_size",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "deposit_required",
+              "displayName": "deposit_required",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "deposit_amount_eur",
+              "displayName": "deposit_amount_eur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "deposit_status",
+              "displayName": "deposit_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "payment_intent_id",
+              "displayName": "payment_intent_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "reminder_sent",
+              "displayName": "reminder_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source_channel",
+              "displayName": "source_channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "special_requests",
+              "displayName": "special_requests",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "4d8e9e03-a213-47c8-8ce8-30630d107a53",
+      "name": "Google Sheets: bookings.reminder_sent=true",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1552,
+        304
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "result",
+              "type": "string",
+              "value": "skipped_not_confirmed"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "42d15d6a-d46d-41ed-8432-8ec67fcde706",
+      "name": "Set: бронь неактивна — ничего не делаем",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1360,
+        592
+      ]
+    },
+    {
+      "parameters": {
+        "content": "Workflow 2 — Reminder-Send\n\nОтдельный воркфлоу, который отправляет гостю текстовое напоминание за 2 часа до брони с кнопками \"Подтверждаю\"/\"Отменяю\".\n\nЗапускается автоматически из Workflow 1 сразу после того, как гость создал бронь — через вебхук, без ожидания (fire-and-forget). Получив booking_id, воркфлоу вычисляет момент \"визит минус 2 часа\" и засыпает до этого времени. Проснувшись, сначала перепроверяет в таблице, что бронь всё ещё активна (не отменена за это время) — если нет, ничего не отправляет и завершается. Если бронь подтверждена — шлёт гостю в Telegram текстовое сообщение с двумя кнопками (без голосового варианта, специально упрощено для MVP) через нативный sendAndWait, который приостанавливает и возобновляет эту же execution.\n\nКлик по кнопке обрабатывается прямо здесь: воркфлоу пробуждается с ответом гостя, помечает reminder_sent в таблице, затем проверяет, что было нажато — \"Подтверждаю\" ведёт к обновлению статуса брони, \"Отменяю\" вызывает общий сабворкфлоу apply_cancellation. В Workflow 1 обрабатывается только случай, когда гость вместо клика написал свободный текст — там бот просит воспользоваться кнопками.",
+        "height": 340,
+        "width": 720
+      },
+      "id": "c7017896-4cfb-4c3f-92c7-e4dc1f582c03",
+      "name": "Sticky_wf2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        32,
+        -144
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f6296130-ca75-464e-89d7-8f2da0cf5c44",
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1808,
+        304
+      ],
+      "id": "a23dd0ae-c795-4e70-a5a1-92bd73e8f7c2",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_2",
+          "mode": "list",
+          "cachedResultName": "Basilik DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "bookings",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "booking_id": "={{ $('Google Sheets: перепроверить бронь').item.json.booking_id }}",
+            "status": "visit_confirmed",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "booking_id"
+          ],
+          "schema": [
+            {
+              "id": "booking_id",
+              "displayName": "booking_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ref_token",
+              "displayName": "ref_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "time",
+              "displayName": "time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "party_size",
+              "displayName": "party_size",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deposit_required",
+              "displayName": "deposit_required",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "deposit_amount_eur",
+              "displayName": "deposit_amount_eur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "deposit_status",
+              "displayName": "deposit_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "payment_intent_id",
+              "displayName": "payment_intent_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "reminder_sent",
+              "displayName": "reminder_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "source_channel",
+              "displayName": "source_channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "special_requests",
+              "displayName": "special_requests",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2016,
+        208
+      ],
+      "id": "1f25e1bc-291d-4b8e-b342-347a3cc10795",
+      "name": "Update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "D55PvRh0GaHG7sEU",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/D55PvRh0GaHG7sEU",
+          "cachedResultName": "Basilik — apply_cancellation (Subworkflow)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "booking_id": "={{ $('Google Sheets: перепроверить бронь').item.json.booking_id }}"
+          },
+          "matchingColumns": [
+            "booking_id"
+          ],
+          "schema": [
+            {
+              "id": "booking_id",
+              "displayName": "booking_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2032,
+        400
+      ],
+      "id": "e4fd2c21-b68a-4951-8bd5-f11c1ce35fe0",
+      "name": "Call 'Basilik — apply_cancellation (Subworkflow)'"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook: приём триггера напоминания": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: получить бронь",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: получить бронь": {
+      "main": [
+        [
+          {
+            "node": "Code: расчёт времени напоминания",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: расчёт времени напоминания": {
+      "main": [
+        [
+          {
+            "node": "Wait: до времени напоминания",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait: до времени напоминания": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: перепроверить бронь",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: перепроверить бронь": {
+      "main": [
+        [
+          {
+            "node": "If: бронь всё ещё активна?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: бронь всё ещё активна?": {
+      "main": [
+        [
+          {
+            "node": "Telegram: отправить напоминание (кнопки)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set: бронь неактивна — ничего не делаем",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: отправить напоминание (кнопки)": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: bookings.reminder_sent=true",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call 'Basilik — apply_cancellation (Subworkflow)'",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: bookings.reminder_sent=true": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

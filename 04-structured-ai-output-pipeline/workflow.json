@@ -1,0 +1,2625 @@
+{
+  "name": "Project 8 — Structured AI Output System (multi-format intake pipeline)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Incoming Materials Intake",
+        "formDescription": "Submit a bug screenshot, PDF spec, or audio/meeting recording for automated processing.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Name",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Email",
+              "fieldType": "email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Submission Type",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Bug Report"
+                  },
+                  {
+                    "option": "Documentation"
+                  },
+                  {
+                    "option": "Meeting Record"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Title",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Comment",
+              "fieldType": "textarea"
+            },
+            {
+              "fieldLabel": "File",
+              "fieldType": "file",
+              "multipleFiles": false,
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "084bacc7-82f3-4571-921c-b60556feaeec",
+      "name": "Form Trigger",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -912,
+        192
+      ],
+      "webhookId": "40a3c9ae-1a24-436c-a85d-12b492c95a1b"
+    },
+    {
+      "parameters": {
+        "jsCode": "// === ВАЛИДАЦИЯ (подготовка данных) + ГЕНЕРАЦИЯ submission_id ===\nconst item = $input.first();\nconst data = item.json;\nconst binary = item.binary;\n\n// Чистые ключи из «красивых» лейблов формы\nconst submitter_name  = data['Name'];\nconst submitter_email = data['Email'];\nconst submission_type = data['Submission Type'];\nconst title           = data['Title'];\nconst comment         = data['Comment'] || '';\n\n// Файл должен дойти — без него нечего маршрутизировать\nconst binaryKey = binary ? Object.keys(binary)[0] : undefined;\nif (!binaryKey) {\n  throw new Error('Validation failed: no file attached');\n}\nconst fileBinary = binary[binaryKey];\n\n// Генерируем submission_id\nconst date = new Date().toISOString().slice(0, 10).replace(/-/g, '');\nconst chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';\nlet rand = '';\nfor (let i = 0; i < 8; i++) rand += chars[Math.floor(Math.random() * chars.length)];\nconst submission_id = `${date}-${rand}`;\n\nreturn [{\n  json: {\n    submission_id,\n    submitter_name,\n    submitter_email,\n    submission_type,\n    title,\n    comment,\n    mime_type: fileBinary.mimeType,\n    validated_at: new Date().toISOString()\n  },\n  binary: { file: fileBinary }\n}];"
+      },
+      "id": "43f27e88-5915-458d-a402-6084ad0b164b",
+      "name": "Validate + submission_id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -688,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.mime_type }}",
+                    "rightValue": "image/png",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "bd6cdaec-a640-48fb-8eff-87a194d12126"
+                  },
+                  {
+                    "leftValue": "={{ $json.mime_type }}",
+                    "rightValue": "image/jpeg",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "00668b65-cd6c-4a77-b4e6-63a45747e11f"
+                  },
+                  {
+                    "leftValue": "={{ $json.mime_type }}",
+                    "rightValue": "image/webp",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "76bbe756-1978-4dcc-9ec5-f43bfb833940"
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "IMAGE"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.mime_type }}",
+                    "rightValue": "application/pdf",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "dc8e93ad-2021-49d6-ad04-2499df42c8c4"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "PDF"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.mime_type }}",
+                    "rightValue": "audio/",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    },
+                    "id": "719c62fb-711b-42b7-86c8-524c9509b2b1"
+                  },
+                  {
+                    "leftValue": "={{ $json.mime_type }}",
+                    "rightValue": "video/mp4",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "f4c2ed30-f0b9-4741-b6e1-307487418b9b"
+                  }
+                ],
+                "combinator": "or"
+              },
+              "renameOutput": true,
+              "outputKey": "AUDIO"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "93965eb5-bb64-4085-b91b-b27b7d4fce0b",
+      "name": "Switch: file type (MIME)",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -272,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "Unsupported file type",
+        "completionMessage": "=Неподдерживаемый тип файла ({{ $json.mime_type }}). Please submit an image (PNG/JPEG/WebP), a PDF, or an audio file.",
+        "options": {}
+      },
+      "id": "fd5e06b4-d823-4e21-8d61-4dedfa1ac91e",
+      "name": "DEFAULT — unsupported type",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 1,
+      "position": [
+        224,
+        464
+      ],
+      "webhookId": "932fb61a-f084-416c-bd81-1f118b5653a5"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=A bug-report screenshot is attached (primary source). User title: {{ $json.title }}. User description: {{ $json.comment || \"not provided\" }}. Analyze the incident from the screenshot and return a bug card following the rules in the system message. If the user description is missing or sparse, rely on the screenshot.",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "# РОЛЬ\nТы — опытный QA-инженер продуктовой команды. Главный и ОБЯЗАТЕЛЬНЫЙ источник — скриншот\nс ошибкой или дефектом интерфейса. Дополнительно может прийти короткий текст от пользователя:\nзаголовок (обязателен) и комментарий (НЕОБЯЗАТЕЛЕН, часто пустой). Твоя задача — разобрать\nинцидент и вернуть строгую структурированную карточку бага.\n\nТекст пользователя — это контекст и гипотеза, а НЕ факт, и его может почти не быть. Если\nкомментарий пуст или скуден — спокойно опирайся на скриншот, это нормально и не мешает\nразбору. То, что видно на изображении, всегда приоритетнее слов пользователя.\n\n# ПРИНЦИП РАБОТЫ (SGR — структурированное рассуждение)\nСначала рассуждай, потом заполняй поля. Веди рассуждение по 5 осям и целиком запиши его в\nполе full_reasoning — оно идёт ПЕРВЫМ, чтобы ты подумал до выводов:\n1. КОМПОНЕНТ — какой экран, раздел или элемент интерфейса затронут.\n2. ПРОБЛЕМА — что именно не работает или отображается некорректно.\n3. ВИДИМАЯ ПРИЧИНА — подсказки о причине сбоя на скриншоте (текст ошибки, код, пустое\n   состояние, некорректные данные).\n4. SEVERITY-СИГНАЛЫ — есть потеря данных? полная блокировка работы? или только визуальный\n   дефект? Отсюда выбирай severity.\n5. РЕКОМЕНДАЦИЯ — конкретное направление исправления.\n\n# ШКАЛА severity\n- critical — система не работает / потеря данных / блокирующая ошибка без обхода.\n- high — ключевая функция сломана, но есть обходной путь.\n- medium — заметная проблема, не блокирует основной сценарий.\n- low — косметика: опечатки, мелкие визуальные дефекты.\n\n# ГРАНИЦА high / critical\nПравило-развязка: спроси себя — можно ли вообще пользоваться приложением хоть как-то?\nЕсли да (сломан один сценарий, остальное живо) → high. Если нет (всё встало, потеря данных,\nобхода нет) → critical. Само по себе «ошибка на экране» ещё не critical.\n\nПримеры из «серой зоны» (одинаковый экран, вердикт решает деталь):\n- Экран оплаты: при «Оплатить» — ошибка, платёж не проходит, но каталог и корзина работают,\n  можно вернуться и выбрать другой способ → severity: high (приложение живо, есть обход).\n- Тот же экран оплаты, но после ошибки корзина очищается и введённые данные теряются при\n  каждой попытке → severity: critical (потеря данных, обхода нет).\n\n# ПОЛЯ (заполняй ровно эти, в этом порядке)\n- full_reasoning — полный текст рассуждения по 5 осям, связной прозой на русском. Пиши ПЕРВЫМ.\n- affected_component — конкретный модуль/экран/элемент («форма авторизации», «корзина»).\n  Не пиши «приложение» в общем. Если определить нельзя — null.\n- problem_description — 1–3 предложения по сути, без воды. Если непонятно — null.\n- error_text_visible — дословный текст ошибки со скриншота. Если текста ошибки нет — null.\n- severity — одно из: critical | high | medium | low.\n- severity_reasoning — почему именно эта оценка, со ссылкой на увиденное (1–2 предложения).\n- reproduction_steps — массив шагов; включай ТОЛЬКО обоснованно следующие из скриншота.\n  Если воспроизведение неочевидно — пустой массив [].\n- recommended_fix — направление решения для разработчика. Если данных мало — null.\n- unclear_areas — массив строк с описанием того, что определить не удалось. Если всё чётко —\n  верни ровно null (именно null, а НЕ массив [null] и НЕ [\"\"]). Не клади в массив пустые\n  значения или null.\n- needs_human_review — true, если изображение нечёткое/обрезано/неоднозначно, не хватает\n  данных, либо confidence < 0.6; иначе false.\n- confidence — число от 0.0 до 1.0 по шкале:\n    0.9–1.0 — всё чётко читается, разбор однозначен;\n    0.6–0.8 — есть мелкие неясности, но диагноз надёжен;\n    ниже 0.6 — существенно неясно/обрезано/неоднозначно → ставь needs_human_review = true.\n  Снижай confidence при нечётком, обрезанном или неоднозначном изображении.\n\n# ЧЕСТНОСТЬ ВЫШЕ ДОГАДОК\nНе выдумывай деталей, которых нет на изображении. Если что-то не видно и не следует из\nописания — ставь null, не заполняй наугад. Любое предположение идёт в unclear_areas, а не\nв факты. Лучше честно поставить needs_human_review = true, чем выдать правдоподобный, но\nневерный диагноз.\n\n# ЯЗЫК И ГРАНИЦЫ\nВсе текстовые поля — на русском. Значения severity — строго из английского списка.\nНЕ заполняй и не упоминай служебные поля: submission_id, timestamp, submitter_name,\nsubmitter_email, title, user_comment, status — их добавляет система, не ты."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        432,
+        -560
+      ],
+      "id": "93b137e3-7300-4bac-a7dc-cb83a9446ece",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4.1",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        464,
+        -336
+      ],
+      "id": "58e80d52-4901-47f7-9234-1b2709c01a4d",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "prompt": "Instructions:\n--------------\n{instructions}\n--------------\nCompletion:\n--------------\n{completion}\n--------------\n\nAbove, the Completion did not satisfy the constraints given in the Instructions.\nError:\n--------------\n{error}\n--------------\n\nPlease try again. Please only respond with an answer that satisfies the constraints laid out in the Instructions:"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserAutofixing",
+      "typeVersion": 1,
+      "position": [
+        784,
+        -336
+      ],
+      "id": "ef67cb20-592a-4488-ae30-b174054cec14",
+      "name": "Auto-fixing Output Parser"
+    },
+    {
+      "parameters": {
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        880,
+        -192
+      ],
+      "id": "ec4f40c0-339d-4bc1-9415-7bb95a804a48",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"full_reasoning\": {\n      \"type\": \"string\",\n      \"description\": \"Полный текст рассуждения по осям 1-7 (компонент, проблема, видимая причина, severity-сигналы, воспроизведение, рекомендация, уверенность), связной прозой на русском. Пиши это поле первым.\"\n    },\n    \"affected_component\": {\n      \"type\": [\"string\", \"null\"],\n      \"description\": \"Конкретный затронутый модуль/экран/элемент. null, если определить нельзя.\"\n    },\n    \"problem_description\": {\n      \"type\": [\"string\", \"null\"],\n      \"description\": \"Суть проблемы в 1-3 предложениях. null, если непонятно.\"\n    },\n    \"error_text_visible\": {\n      \"type\": [\"string\", \"null\"],\n      \"description\": \"Дословный текст ошибки со скриншота. null, если текста ошибки нет.\"\n    },\n    \"severity\": {\n      \"type\": \"string\",\n      \"enum\": [\"critical\", \"high\", \"medium\", \"low\"],\n      \"description\": \"Критичность: critical блокирует/потеря данных, high ключевая функция сломана, medium заметная непокрывающая проблема, low косметика.\"\n    },\n    \"severity_reasoning\": {\n      \"type\": \"string\",\n      \"description\": \"Обоснование выбранного severity со ссылкой на увиденное, 1-2 предложения.\"\n    },\n    \"reproduction_steps\": {\n      \"type\": \"array\",\n      \"items\": { \"type\": \"string\" },\n      \"description\": \"Шаги воспроизведения, только обоснованно следующие из скриншота. Пустой массив, если неочевидно.\"\n    },\n    \"recommended_fix\": {\n      \"type\": [\"string\", \"null\"],\n      \"description\": \"Направление решения для разработчика. null, если данных мало.\"\n    },\n    \"unclear_areas\": {\n      \"type\": [\"array\", \"null\"],\n      \"items\": { \"type\": \"string\" },\n      \"description\": \"Что определить не удалось. null, если всё чётко.\"\n    },\n    \"needs_human_review\": {\n      \"type\": \"boolean\",\n      \"description\": \"true, если изображение нечёткое/обрезано/неоднозначно, не хватает данных или модель не уверена; иначе false.\"\n    },\n    \"confidence\": {\n      \"type\": \"number\",\n      \"description\": \"Уверенность модели в разборе, число от 0.0 до 1.0. Снижай при нечётком, обрезанном или неоднозначном изображении. Если confidence < 0.6 — ставь needs_human_review = true.\"\n    }\n  },\n  \"required\": [\n    \"full_reasoning\",\n    \"affected_component\",\n    \"problem_description\",\n    \"error_text_visible\",\n    \"severity\",\n    \"severity_reasoning\",\n    \"reproduction_steps\",\n    \"recommended_fix\",\n    \"unclear_areas\",\n    \"needs_human_review\",\n    \"confidence\"\n  ],\n  \"additionalProperties\": false\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1120,
+        -240
+      ],
+      "id": "53eb61bb-33b5-42c0-ad1d-a363d981fd02",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "file",
+        "options": {
+          "joinPages": true
+        }
+      },
+      "id": "21d3b8ea-911e-497e-9f0f-326dad819d76",
+      "name": "Extract from File",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        832,
+        48
+      ],
+      "retryOnFail": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "text",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            },
+            {
+              "id": "p2",
+              "name": "text_length_chars",
+              "value": "={{ ($json.text || '').length }}",
+              "type": "number"
+            },
+            {
+              "id": "p3",
+              "name": "source_type",
+              "value": "pdf_extraction",
+              "type": "string"
+            },
+            {
+              "id": "p4",
+              "name": "is_scanned_pdf",
+              "value": "={{ ($json.text || '').trim().length < 20 }}",
+              "type": "boolean"
+            },
+            {
+              "id": "p5",
+              "name": "original_filename",
+              "value": "={{ $('Validate + submission_id').first().binary.file.fileName }}",
+              "type": "string"
+            },
+            {
+              "id": "bddc1e49-8bcf-4c48-9209-28bdad148226",
+              "name": "google_drive_file_id",
+              "value": "={{ $('Upload file').item.json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "dc858361-3f43-4135-9d8a-d994e6ab9270",
+              "name": "google_drive_file_url",
+              "value": "={{ $('Upload file').item.json.webViewLink }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "c7deaf16-a7c2-4c36-afb0-ce8afff58aa5",
+      "name": "Set — Norm PDF",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1136,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.deepgram.com/v1/listen",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "nova-3"
+            },
+            {
+              "name": "language",
+              "value": "multi"
+            },
+            {
+              "name": "smart_format",
+              "value": "true"
+            },
+            {
+              "name": "punctuate",
+              "value": "true"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "={{ $binary.file.mimeType }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "file",
+        "options": {}
+      },
+      "id": "85b3d61f-5d91-4059-8e4d-1c6bebd793ba",
+      "name": "HTTP Deepgram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        848,
+        240
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Header Auth account 7"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "52ae6f7f-5d0c-4dbd-8c0e-5ae4cdf82daa",
+      "name": "Merge — Join",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1520,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_4",
+          "mode": "list",
+          "cachedResultName": "Project8 — Bug Reports",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 198043174,
+          "mode": "list",
+          "cachedResultName": "Source Documents",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_4/edit#gid=198043174"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "submission_id": "={{ $('Validate + submission_id').first().json.submission_id }}",
+            "timestamp": "={{ $now.toISO() }}",
+            "submitter_name": "={{ $('Validate + submission_id').first().json.submitter_name }}",
+            "submitter_email": "={{ $('Validate + submission_id').first().json.submitter_email }}",
+            "submission_type": "={{ $('Validate + submission_id').first().json.submission_type }}",
+            "title": "={{ $('Validate + submission_id').first().json.title }}",
+            "user_comment": "={{ $('Validate + submission_id').first().json.comment || '' }}",
+            "original_filename": "={{ $('Merge — Join').item.json.original_filename }}",
+            "source_type": "={{ $('Merge — Join').item.json.source_type }}",
+            "text_length_chars": "={{ $('Merge — Join').item.json.text_length_chars }}",
+            "google_drive_file_id": "= {{ $('Merge — Join').item.json.google_drive_file_id }}",
+            "google_drive_file_url": "={{ $('Merge — Join').item.json.google_drive_file_url }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "submission_id",
+              "displayName": "submission_id",
+              "type": "string",
+              "required": false,
+              "canBeUsedToMatch": true,
+              "display": true
+            },
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "type": "string",
+              "required": false,
+              "canBeUsedToMatch": true,
+              "display": true
+            },
+            {
+              "id": "submitter_name",
+              "displayName": "submitter_name",
+              "type": "string",
+              "required": false,
+              "canBeUsedToMatch": true,
+              "display": true
+            },
+            {
+              "id": "submitter_email",
+              "displayName": "submitter_email",
+              "type": "string",
+              "required": false,
+              "canBeUsedToMatch": true,
+              "display": true
+            },
+            {
+              "id": "submission_type",
+              "displayName": "submission_type",
+              "type": "string",
+              "required": false,
+              "canBeUsedToMatch": true,
+              "display": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "type": "string",
+              "required": false,
+              "canBeUsedToMatch": true,
+              "display": true
+            },
+            {
+              "id": "user_comment",
+              "displayName": "user_comment",
+              "type": "string",
+              "required": false,
+              "canBeUsedToMatch": true,
+              "display": true
+            },
+            {
+              "id": "original_filename",
+              "displayName": "original_filename",
+              "type": "string",
+              "required": false,
+              "canBeUsedToMatch": true,
+              "display": true
+            },
+            {
+              "id": "source_type",
+              "displayName": "source_type",
+              "type": "string",
+              "required": false,
+              "canBeUsedToMatch": true,
+              "display": true
+            },
+            {
+              "id": "text_length_chars",
+              "displayName": "text_length_chars",
+              "type": "number",
+              "required": false,
+              "canBeUsedToMatch": true,
+              "display": true
+            },
+            {
+              "id": "google_drive_file_id",
+              "displayName": "google_drive_file_id",
+              "type": "string",
+              "required": false,
+              "canBeUsedToMatch": true,
+              "display": true
+            },
+            {
+              "id": "google_drive_file_url",
+              "displayName": "google_drive_file_url",
+              "type": "string",
+              "required": false,
+              "canBeUsedToMatch": true,
+              "display": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "6900bc5d-f14d-47a9-8a58-ee1521c540e8",
+      "name": "Google Sheets — Source Documents",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1792,
+        128
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "inputDataFieldName": "file",
+        "name": "={{ $('Validate + submission_id').first().json.submission_id }}_{{ $binary.file.fileName }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_DRIVE_FOLDER_ID",
+          "mode": "list",
+          "cachedResultName": "Project 8 source files",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/YOUR_GOOGLE_DRIVE_FOLDER_ID"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        400,
+        48
+      ],
+      "id": "805d230c-48a7-4684-944b-176ccaf7cfed",
+      "name": "Upload file",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "name": "Google Drive account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "inputDataFieldName": "file",
+        "name": "={{ $('Validate + submission_id').first().json.submission_id }}_{{ $binary.file.fileName }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive",
+          "cachedResultUrl": "https://drive.google.com/drive/my-drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_DRIVE_FOLDER_ID",
+          "mode": "list",
+          "cachedResultName": "Project 8 source files",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/YOUR_GOOGLE_DRIVE_FOLDER_ID"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        432,
+        224
+      ],
+      "id": "974ab96c-2b81-4d75-9fec-515a8a699887",
+      "name": "Upload file1",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "name": "Google Drive account 4"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e5f07a22-f1f2-45df-b6ba-b84a172dc1bc",
+              "name": "text",
+              "value": "={{ $json.results.channels[0].alternatives[0].transcript }}",
+              "type": "string"
+            },
+            {
+              "id": "66f1c8d1-dc23-45ed-a787-eb0b5815cc2b",
+              "name": "text_length_chars",
+              "value": "={{ ($json.results.channels[0].alternatives[0].transcript || '').length }}",
+              "type": "number"
+            },
+            {
+              "id": "27f19f77-d9ee-4db5-b51d-6f3d95433103",
+              "name": "source_type",
+              "value": "audio_transcription",
+              "type": "string"
+            },
+            {
+              "id": "e47b7e94-4bd3-4ae2-ab35-fd568d8201ae",
+              "name": "original_filename",
+              "value": "={{ $('Validate + submission_id').first().binary.file.fileName }}",
+              "type": "string"
+            },
+            {
+              "id": "5e27e3fb-36c9-40be-9709-1a5f25688dc6",
+              "name": "google_drive_file_id",
+              "value": "={{ $('Upload file1').item.json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "f7701145-97bb-4c1d-bb35-4811c883dcd0",
+              "name": "google_drive_file_url",
+              "value": "={{ $('Upload file1').item.json.webViewLink }}",
+              "type": "string"
+            },
+            {
+              "id": "cfbdf16d-9b53-40f3-b391-46ac012b0888",
+              "name": "s_scanned_pdf",
+              "value": "false",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1136,
+        240
+      ],
+      "id": "2ce6f7a1-e1b4-44a8-9e56-d9160a94a884",
+      "name": "Set — Norm Audio1"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Merge — Join').first().json.text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Ты — ассистент, который делает структурированное резюме документа.\n   Прочитай текст целиком и верни резюме строго в заданной JSON-схеме.\n\n   Правила:\n   - summary: связное резюме сути, 4–8 предложений, на русском.\n   - topics: массив ключевых тем (3–7 строк), иначе [].\n   - actions: массив конкретных действий/следующих шагов, иначе [].\n   - doc_type: одно из [meeting, spec, research, report, other].\n   Не добавляй текст вне JSON. Не выдумывай факты, которых нет в документе."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        2672,
+        160
+      ],
+      "id": "9f6898b2-f29a-43eb-9d5f-4bfd1a40cabc",
+      "name": "AI Agent «Summarize (direct)»",
+      "retryOnFail": false,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4.1",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        2560,
+        352
+      ],
+      "id": "0630802d-dd16-4336-ac90-39c2f1242dec",
+      "name": "OpenRouter Chat Model2",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserAutofixing",
+      "typeVersion": 1,
+      "position": [
+        2880,
+        368
+      ],
+      "id": "2aad87dd-1bea-4f52-9a45-743443327b3b",
+      "name": "Auto-fixing Output Parser1"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "\n{\n     \"type\": \"object\",\n     \"properties\": {\n       \"summary\":  { \"type\": \"string\" },\n       \"topics\":   { \"type\": \"array\", \"items\": { \"type\": \"string\" } },\n       \"actions\":  { \"type\": \"array\", \"items\": { \"type\": \"string\" } },\n       \"doc_type\": { \"type\": \"string\", \"enum\": [\"meeting\", \"spec\", \"research\", \"report\", \"other\"] }\n     },\n     \"required\": [\"summary\", \"topics\", \"actions\", \"doc_type\"],\n     \"additionalProperties\": false\n   }"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        3040,
+        512
+      ],
+      "id": "6bdb247a-537c-427a-ba51-2cdd090eea64",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        2864,
+        528
+      ],
+      "id": "ad5105a7-37b0-4632-8dce-070f63dc4425",
+      "name": "OpenRouter Chat Model3",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_4",
+          "mode": "list",
+          "cachedResultName": "Project8",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1389083985,
+          "mode": "list",
+          "cachedResultName": "Summaries",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_4/edit#gid=1389083985"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "submission_id": "={{ $('Validate + submission_id').first().json.submission_id }}",
+            "created_at": "={{ $now.toISO() }}",
+            "submitter_name": "={{ $('Validate + submission_id').first().json.submitter_name }}",
+            "submitter_email": "={{ $('Validate + submission_id').first().json.submitter_email }}",
+            "submission_type": "={{ $('Validate + submission_id').first().json.submission_type }}",
+            "title": "={{ $('Validate + submission_id').first().json.title }}",
+            "original_filename": "={{ $('Merge — Join').first().json.original_filename }}",
+            "source_type": "={{ $('Merge — Join').first().json.source_type }}",
+            "text_length_chars": "={{ $('Merge — Join').first().json.text_length_chars }}",
+            "summary": "={{ $json.output.summary }}",
+            "topics": "={{ ($json.output.topics || []).join('\\n') }}",
+            "actions": "={{ ($json.output.actions || []).join('\\n') }}",
+            "doc_type": "={{ $json.output.doc_type }}",
+            "model_used": "gpt-4o",
+            "processing_notes": "direct",
+            "processing_method": "direct"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "submission_id",
+              "displayName": "submission_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "submitter_name",
+              "displayName": "submitter_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "submitter_email",
+              "displayName": "submitter_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "submission_type",
+              "displayName": "submission_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "original_filename",
+              "displayName": "original_filename",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source_type",
+              "displayName": "source_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "text_length_chars",
+              "displayName": "text_length_chars",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "processing_method",
+              "displayName": "processing_method",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chunks_count",
+              "displayName": "chunks_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "summary",
+              "displayName": "summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "topics",
+              "displayName": "topics",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "actions",
+              "displayName": "actions",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "doc_type",
+              "displayName": "doc_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "model_used",
+              "displayName": "model_used",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "processing_notes",
+              "displayName": "processing_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "manual_required",
+              "displayName": "manual_required",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3024,
+        160
+      ],
+      "id": "1514c43b-c689-4482-8fc3-43eb38ff4ede",
+      "name": "Append summary (direct)»",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "chunks",
+        "include": "allOtherFields",
+        "options": {
+          "destinationFieldName": "chunk_text"
+        }
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        2688,
+        -240
+      ],
+      "id": "83259c99-e64b-4f9f-8568-e33675651a01",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chunk_text }}",
+        "messages": {
+          "messageValues": [
+            {
+              "message": "Ты суммаризируешь ОДИН фрагмент большого документа. Опиши только то, что есть в этом фрагменте: главные факты, решения, задачи. НЕ пиши общий вывод про весь документ — ты видишь лишь часть. Ответ: 3–5 предложений на русском, без вводных фраз."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        2992,
+        -304
+      ],
+      "id": "99bd4b13-1a50-470e-8b2a-d1452b35d6ad",
+      "name": "MAP summarize chunk",
+      "retryOnFail": false,
+      "maxTries": 2
+    },
+    {
+      "parameters": {
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        2992,
+        -128
+      ],
+      "id": "609029ba-69de-4e84-8cc9-92f52e4195d3",
+      "name": "OpenRouter Chat Model4",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "text",
+              "renameField": true,
+              "outputFieldName": "partial_summaries"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        3344,
+        -304
+      ],
+      "id": "17b546fb-3cb0-472f-acaf-63dba43f6b7f",
+      "name": "Aggregate summaries."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c2332eb1-2c92-447a-99ae-59d0a853a35e",
+              "name": "combined_text",
+              "value": "={{ $json.partial_summaries.join('\\n\\n---\\n\\n') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3552,
+        -304
+      ],
+      "id": "76710adc-97c1-4f84-87f0-13373987223a",
+      "name": "Prepare Reduce Input"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.combined_text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Ниже — набор частичных резюме фрагментов ОДНОГО документа, разделённых '---'.\nСобери из них ЕДИНОЕ финальное резюме всего документа и верни строго в JSON-схеме.\nПравила:\n- summary: связное резюме сути, 4–8 предложений, на русском.\n- topics: массив ключевых тем (3–7 строк), иначе [].\n- actions: массив конкретных действий/следующих шагов, иначе [].\n- doc_type: одно из [meeting, spec, research, report, other].\nУбери повторы между фрагментами. Не добавляй фактов, которых нет в резюме. Никакого текста вне JSON."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        3760,
+        -304
+      ],
+      "id": "f45b72dd-46cc-46c9-a939-9adae7986cb1",
+      "name": "REDUCE final summary",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4.1",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        3712,
+        -128
+      ],
+      "id": "d431c3b6-8057-47ea-a00d-73e97344dfe9",
+      "name": "OpenRouter Chat Model5",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserAutofixing",
+      "typeVersion": 1,
+      "position": [
+        3936,
+        -96
+      ],
+      "id": "f85810d0-e8ea-4843-8b4b-0a549673096d",
+      "name": "Auto-fixing Output Parser2"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4.1",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        3824,
+        112
+      ],
+      "id": "13d91bc8-1c67-41bc-9b73-f10ca2e915f2",
+      "name": "OpenRouter Chat Model6",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"summary\":  { \"type\": \"string\" },\n    \"topics\":   { \"type\": \"array\", \"items\": { \"type\": \"string\" } },\n    \"actions\":  { \"type\": \"array\", \"items\": { \"type\": \"string\" } },\n    \"doc_type\": { \"type\": \"string\", \"enum\": [\"meeting\", \"spec\", \"research\", \"report\", \"other\"] }\n  },\n  \"required\": [\"summary\", \"topics\", \"actions\", \"doc_type\"],\n  \"additionalProperties\": false\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        4080,
+        112
+      ],
+      "id": "7f9a14a6-be1d-42bd-96b6-009997adb64f",
+      "name": "Structured Output Parser2"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_4",
+          "mode": "list",
+          "cachedResultName": "Project8",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1389083985,
+          "mode": "list",
+          "cachedResultName": "Summaries",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_4/edit#gid=1389083985"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "submission_id": "={{ $('Validate + submission_id').first().json.submission_id }}",
+            "created_at": "={{ $now.toISO() }}",
+            "submitter_name": "={{ $('Validate + submission_id').first().json.submitter_name }}",
+            "submitter_email": "={{ $('Validate + submission_id').first().json.submitter_email }}",
+            "submission_type": "={{ $('Validate + submission_id').first().json.submission_type }}",
+            "title": "={{ $('Validate + submission_id').first().json.title }}",
+            "original_filename": "={{ $('Merge — Join').first().json.original_filename }}",
+            "source_type": "={{ $('Merge — Join').first().json.source_type }}",
+            "text_length_chars": "={{ $('Merge — Join').first().json.text_length_chars }}",
+            "processing_method": "map_reduce",
+            "chunks_count": "={{ $('Split into chunks').first().json.chunks_count }}",
+            "summary": "={{ $json.output.summary }}",
+            "topics": "={{ ($json.output.topics || []).join('\\n') }}",
+            "actions": "={{ ($json.output.actions || []).join('\\n') }}",
+            "doc_type": "={{ $json.output.doc_type }}",
+            "model_used": "gpt-4o-mini + gpt-4.1"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "submission_id",
+              "displayName": "submission_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "submitter_name",
+              "displayName": "submitter_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "submitter_email",
+              "displayName": "submitter_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "submission_type",
+              "displayName": "submission_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "original_filename",
+              "displayName": "original_filename",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source_type",
+              "displayName": "source_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "text_length_chars",
+              "displayName": "text_length_chars",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "processing_method",
+              "displayName": "processing_method",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chunks_count",
+              "displayName": "chunks_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "summary",
+              "displayName": "summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "topics",
+              "displayName": "topics",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "actions",
+              "displayName": "actions",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "doc_type",
+              "displayName": "doc_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "model_used",
+              "displayName": "model_used",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "processing_notes",
+              "displayName": "processing_notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "manual_required",
+              "displayName": "manual_required",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4192,
+        -400
+      ],
+      "id": "f030f90d-5f90-44b0-bf2e-67c603f3cd98",
+      "name": "Append summary (map-reduce)»",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $('Merge — Join').first().json.text || '';\nconst MAX = 8000;\nconst paragraphs = text.split(/\\n\\s*\\n/);\nconst chunks = [];\nlet buf = '';\nfor (const p of paragraphs) {\n  if (p.length > MAX) {\n    if (buf) { chunks.push(buf); buf = ''; }\n    for (let i = 0; i < p.length; i += MAX) chunks.push(p.slice(i, i + MAX));\n    continue;\n  }\n  if ((buf + '\\n\\n' + p).length > MAX) {\n    if (buf) chunks.push(buf);\n    buf = p;\n  } else {\n    buf = buf ? buf + '\\n\\n' + p : p;\n  }\n}\nif (buf) chunks.push(buf);\nreturn [{\n  json: {\n    chunks,\n    chunks_count: chunks.length,\n    submission_id: $('Validate + submission_id').first().json.submission_id\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2480,
+        -128
+      ],
+      "id": "7f800080-75e8-477c-a88b-9d3497ca5cc0",
+      "name": "Split into chunks"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        3568,
+        720
+      ],
+      "id": "facee35c-1fa4-4bd6-816f-c760e3d05a02",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_4",
+          "mode": "list",
+          "cachedResultName": "Project8",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1125463684,
+          "mode": "list",
+          "cachedResultName": "Errors",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_4/edit#gid=1125463684"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now.toISO() }}",
+            "workflow": "={{ $json.workflow.name }}",
+            "node": "={{ $json.execution.lastNodeExecuted }}",
+            "error_message": "={{ $json.execution.error.message }}",
+            "execution_url": "={{ $json.execution.url }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workflow",
+              "displayName": "workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "node",
+              "displayName": "node",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "error_message",
+              "displayName": "error_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "execution_url",
+              "displayName": "execution_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3776,
+        720
+      ],
+      "id": "111e6b04-3258-408a-a966-2fe3a6bd7d96",
+      "name": "Log error",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": " INTAKE (вход)\n\n\nЕдиная точка входа. Form Trigger → Validate + submission_id → Switch (MIME).\nsubmission_id = YYYYMMDD-XXXXXXXX помечает каждую строку и файл в Drive.\nSwitch: IMAGE / PDF / AUDIO → ветки; DEFAULT → сообщение о неподдерживаемом файле.",
+        "height": 560,
+        "width": 1392
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1088,
+        -80
+      ],
+      "typeVersion": 1,
+      "id": "46942dd7-1b74-4823-be47-905f23d9b667",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "② ВЕТКА 1 — VISION BUG REPORTS (SGR)\n\n\nСкриншот → AI Agent (gpt-4o, Vision, SGR-промпт на 5 осей) → Autofixing → Structured Parser → Sheets «Bug Reports» → Gmail glass-box ответ.\nfull_reasoning — первое поле JSON (сначала рассуждение, потом ответ). confidence < 0.6 → needs_human_review.",
+        "height": 720,
+        "width": 1936,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -96,
+        -736
+      ],
+      "typeVersion": 1,
+      "id": "7c457ef9-8755-481d-99d8-7ae4fc560b2e",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "③ ВЕТКА 2 — ДОКУМЕНТЫ (вход + хранение)\n\n\nPDF (Extract from File) / Audio (Deepgram nova-3) → Drive Upload ПЕРВЫМ (пока бинарник жив) → Code восстанавливает бинарник → Set нормализация → Merge — Join → Sheets «Source Documents» (12 колонок + ссылка на Drive).",
+        "height": 688,
+        "width": 1920,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        400,
+        -64
+      ],
+      "typeVersion": 1,
+      "id": "515b0358-6443-448a-addf-0fc06cf34844",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "④ СУММАРИЗАЦИЯ — Map-Reduce\n\n\nIF text_length_chars > 10000.\nFALSE → прямой суммаризатор (gpt-4o).\nTRUE → Split into chunks (8k) → Split Out → MAP (gpt-4o-mini, только свой чанк) → Aggregate → Reduce (gpt-4.1) → Structured Parser → Sheets «Summaries».",
+        "height": 1088,
+        "width": 2176,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2336,
+        -480
+      ],
+      "typeVersion": 1,
+      "id": "05dfdca1-a1d2-40ca-902d-ac85fbaaf709",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "#⑤ ОБРАБОТКА ОШИБОК\n\n\nError Trigger → Sheets «Errors». Retry On Fail на Drive + Sheets (временные сбои).\nСуммаризатор On Error = Continue → Fallback-цепочка (семантические / JSON-ошибки).\nЗашифрованный / сканированный PDF → помечается, manual_required = true.",
+        "height": 352,
+        "width": 1376,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3072,
+        656
+      ],
+      "typeVersion": 1,
+      "id": "d7ac5d29-1df0-484e-80b3-d2d806181928",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_4",
+          "mode": "list",
+          "cachedResultName": "Project8",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1125463684,
+          "mode": "list",
+          "cachedResultName": "Errors",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_4/edit#gid=1125463684"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now.toISO() }}",
+            "workflow": "={{ $workflow.name }}",
+            "node": "Switch → DEFAULT (unsupported)",
+            "error_message": "=Unsupported file type: {{ $('Validate + submission_id').first().json.mime_type }} | file: {{ $('Validate + submission_id').first().binary.file.fileName }} | id: {{ $('Validate + submission_id').first().json.submission_id }} | from: {{ $('Validate + submission_id').first().json.submitter_email }}",
+            "execution_url": "={{ $execution.id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workflow",
+              "displayName": "workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "node",
+              "displayName": "node",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "error_message",
+              "displayName": "error_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "execution_url",
+              "displayName": "execution_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -16,
+        464
+      ],
+      "id": "730132ca-196c-4b01-bdbc-ece9d44f104e",
+      "name": "Log rejected",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6d04bb01-ccc6-4658-abf1-44f6c2231e27",
+              "leftValue": "={{ $('Merge — Join').first().json.text_length_chars }}",
+              "rightValue": 10000,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2144,
+        112
+      ],
+      "id": "493d3fc2-16fc-4379-ba2d-4c659659be1b",
+      "name": "IF — длина текста"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_4",
+          "mode": "list",
+          "cachedResultName": "Project8",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1125463684,
+          "mode": "list",
+          "cachedResultName": "Errors",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_4/edit#gid=1125463684"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now.toISO() }}",
+            "workflow": "={{ $workflow.name }}",
+            "node": "Extract from File (encrypted PDF)",
+            "error_message": "=Encrypted/protected PDF — manual extraction required | file: {{ $('Validate + submission_id').first().binary.file.fileName }} | id: {{ $('Validate + submission_id').first().json.submission_id }} | drive: {{ $('Upload file').first().json.webViewLink }}",
+            "execution_url": "={{ $execution.id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "workflow",
+              "displayName": "workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "node",
+              "displayName": "node",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "error_message",
+              "displayName": "error_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "execution_url",
+              "displayName": "execution_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1200,
+        96
+      ],
+      "id": "cef52d7b-92c4-48d1-82cd-ee629a551433",
+      "name": "Log encrypted PDF",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "$input.item.binary = $('Validate + submission_id').first().binary;\nreturn $input.item;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        48
+      ],
+      "id": "47afb49f-8485-4320-abf4-4793845ad96f",
+      "name": "Restore binary (PDF)"
+    },
+    {
+      "parameters": {
+        "jsCode": "$input.item.binary = $('Validate + submission_id').first().binary;\nreturn $input.item;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        240
+      ],
+      "id": "5677899e-792a-485b-bada-d456b43098f5",
+      "name": "Restore binary (audio)"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_4",
+          "mode": "list",
+          "cachedResultName": "Project8 — Bug Reports",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 623878039,
+          "mode": "list",
+          "cachedResultName": "Bug Report",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_4/edit#gid=623878039"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "unclear_areas": "={{ Array.isArray($json.output.unclear_areas) ? $json.output.unclear_areas.join('\\n') : '' }}",
+            "affected_component": "={{ $json.output.affected_component }}",
+            "problem_description": "={{ $json.output.problem_description }}",
+            "error_text_visible": "={{ $json.output.error_text_visible }}",
+            "severity": "={{ $json.output.severity }}",
+            "severity_reasoning": "={{ $json.output.severity_reasoning }}",
+            "reproduction_steps": "={{ ($json.output.reproduction_steps || []).join('\\n') }}",
+            "recommended_fix": "={{ $json.output.recommended_fix }}",
+            "full_reasoning": "={{ $json.output.full_reasoning }}",
+            "submission_id": "={{ $('Validate + submission_id').item.json.submission_id }}",
+            "timestamp": "={{ $now.toISO() }}",
+            "submitter_name": "={{ $('Validate + submission_id').first().json.submitter_name }}",
+            "submitter_email": "={{ $('Validate + submission_id').first().json.submitter_email }}",
+            "title": "={{ $('Validate + submission_id').first().json.title }}",
+            "user_comment": "={{ $('Validate + submission_id').first().json.comment }}",
+            "status": "new",
+            "needs_human_review": "={{ $json.output.needs_human_review }}",
+            "Confidence": "={{ $json.output.confidence }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "submission_id",
+              "displayName": "submission_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "submitter_name",
+              "displayName": "submitter_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "submitter_email",
+              "displayName": "submitter_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "user_comment",
+              "displayName": "user_comment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "affected_component",
+              "displayName": "affected_component",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "problem_description",
+              "displayName": "problem_description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "error_text_visible",
+              "displayName": "error_text_visible",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "severity",
+              "displayName": "severity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "severity_reasoning",
+              "displayName": "severity_reasoning",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reproduction_steps",
+              "displayName": "reproduction_steps",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recommended_fix",
+              "displayName": "recommended_fix",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "needs_human_review",
+              "displayName": "needs_human_review",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Confidence",
+              "displayName": "Confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "unclear_areas",
+              "displayName": "unclear_areas",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "full_reasoning",
+              "displayName": "full_reasoning",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        784,
+        -560
+      ],
+      "id": "ff5b1ef5-e50f-4078-b13a-b8ccff857314",
+      "name": "Append Bug Report",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Validate + submission_id').first().json.submitter_email }}",
+        "subject": "=Баг-репорт принят — {{ $('Validate + submission_id').first().json.submission_id }}",
+        "emailType": "text",
+        "message": "=Баг-репорт принят и проанализирован.\n\nID: {{ $('Validate + submission_id').first().json.submission_id }}\nЗаголовок: {{ $('Validate + submission_id').first().json.title }}\nSeverity: {{ $('AI Agent').first().json.output.severity }} [Уверенность: {{ Math.round($('AI Agent').first().json.output.confidence * 100) }}%]\nПочему {{ $('AI Agent').first().json.output.severity }}: {{ $('AI Agent').first().json.output.severity_reasoning }}\nСтатус: new",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1040,
+        -560
+      ],
+      "id": "fc9a247c-9982-45f0-b773-7d298bf78a8b",
+      "name": "Send bug email",
+      "webhookId": "4cb3c37d-b229-4a91-a4c2-1277d663e3ba",
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail account 8"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Form Trigger": {
+      "main": [
+        [
+          {
+            "node": "Validate + submission_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate + submission_id": {
+      "main": [
+        [
+          {
+            "node": "Switch: file type (MIME)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch: file type (MIME)": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Upload file",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Upload file1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-fixing Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Auto-fixing Output Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Auto-fixing Output Parser",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Append Bug Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Set — Norm PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log encrypted PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set — Norm PDF": {
+      "main": [
+        [
+          {
+            "node": "Merge — Join",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Deepgram": {
+      "main": [
+        [
+          {
+            "node": "Set — Norm Audio1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge — Join": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets — Source Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload file": {
+      "main": [
+        [
+          {
+            "node": "Restore binary (PDF)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload file1": {
+      "main": [
+        [
+          {
+            "node": "Restore binary (audio)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set — Norm Audio1": {
+      "main": [
+        [
+          {
+            "node": "Merge — Join",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Google Sheets — Source Documents": {
+      "main": [
+        [
+          {
+            "node": "IF — длина текста",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent «Summarize (direct)»",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-fixing Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent «Summarize (direct)»",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Auto-fixing Output Parser1",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Auto-fixing Output Parser1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent «Summarize (direct)»": {
+      "main": [
+        [
+          {
+            "node": "Append summary (direct)»",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "MAP summarize chunk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "MAP summarize chunk",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MAP summarize chunk": {
+      "main": [
+        [
+          {
+            "node": "Aggregate summaries.",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate summaries.": {
+      "main": [
+        [
+          {
+            "node": "Prepare Reduce Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Reduce Input": {
+      "main": [
+        [
+          {
+            "node": "REDUCE final summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "REDUCE final summary",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-fixing Output Parser2": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "REDUCE final summary",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model6": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Auto-fixing Output Parser2",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser2": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Auto-fixing Output Parser2",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "REDUCE final summary": {
+      "main": [
+        [
+          {
+            "node": "Append summary (map-reduce)»",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split into chunks": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Log error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DEFAULT — unsupported type": {
+      "main": [
+        []
+      ]
+    },
+    "Log rejected": {
+      "main": [
+        [
+          {
+            "node": "DEFAULT — unsupported type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF — длина текста": {
+      "main": [
+        [
+          {
+            "node": "Split into chunks",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent «Summarize (direct)»",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore binary (PDF)": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restore binary (audio)": {
+      "main": [
+        [
+          {
+            "node": "HTTP Deepgram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append Bug Report": {
+      "main": [
+        [
+          {
+            "node": "Send bug email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

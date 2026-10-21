@@ -1,0 +1,3520 @@
+{
+  "name": "Basilik — Workflow 1 (основной диалог с гостем)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "id": "795df3ed-035e-46a0-ae3f-3459507b46ba",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -2000,
+        1088
+      ],
+      "webhookId": "a3caf8b6-7212-4a70-a7ad-3b5c82142e64",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendChatAction",
+        "chatId": "={{ $json.message?.chat?.id || $json.callback_query?.message?.chat?.id }}"
+      },
+      "id": "bafbd498-3df9-42fd-b4d6-1d22e3f5bac7",
+      "name": "Send Chat Action",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1776,
+        1184
+      ],
+      "webhookId": "5566dd54-c573-4f88-bffd-d4a31d487d78",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      },
+      "notes": "Индикатор 'печатает…' сразу по получении сообщения. Тупиковая ветка, дальше никуда не подключена — как в референсе."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.message?.voice?.file_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              },
+              "id": "2432e584-e000-4029-9217-e34dcea0ca55"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "15d526b0-0068-45ff-b24d-8a6f4ca3aafe",
+      "name": "Voice or Text?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1776,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.voice.file_id }}",
+        "additionalFields": {}
+      },
+      "id": "2d61550a-687a-48c7-977c-2224a29ce898",
+      "name": "Get Voice File",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1552,
+        896
+      ],
+      "webhookId": "3f431b30-10f3-48a9-a352-809cb256bb09",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      },
+      "notes": "Резолвит voice.file_id в реальный бинарник (Telegram getFile + download). Без этого шага у Deepgram нет что транскрибировать — этого узла не хватало в первой версии файла."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "raw_text",
+              "type": "string",
+              "value": "={{ $json.text }}",
+              "id": "33124445-3af4-4459-84fd-c98de3055c90"
+            },
+            {
+              "name": "channel",
+              "type": "string",
+              "value": "voice",
+              "id": "f98020cf-df33-4513-aa3e-74e63883968c"
+            },
+            {
+              "name": "chat_id",
+              "type": "string",
+              "value": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+              "id": "a79472d4-5a5a-4edf-8fff-b3f8a3bd4c74"
+            },
+            {
+              "name": "message_id",
+              "type": "string",
+              "value": "={{ $('Telegram Trigger').item.json.message.message_id }}",
+              "id": "57cbd9d3-72d6-4412-be77-ed6ccee3a5b6"
+            },
+            {
+              "name": "callback_data",
+              "type": "string",
+              "value": "={{ null }}",
+              "id": "cb05baa1-7ae2-46b9-8d09-801c170dde01"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "75733742-cc37-4dfd-966a-adde7a68f206",
+      "name": "Normalize Voice Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1104,
+        896
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "raw_text",
+              "type": "string",
+              "value": "={{ $json.message?.text || '' }}"
+            },
+            {
+              "name": "channel",
+              "type": "string",
+              "value": "text"
+            },
+            {
+              "name": "chat_id",
+              "type": "string",
+              "value": "={{ $json.message?.chat?.id || $json.callback_query?.message?.chat?.id }}"
+            },
+            {
+              "name": "message_id",
+              "type": "string",
+              "value": "={{ $json.message?.message_id || $json.callback_query?.message?.message_id }}"
+            },
+            {
+              "name": "callback_data",
+              "type": "string",
+              "value": "={{ $json.callback_query?.data || null }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f3b5d199-a8fb-4caa-aa6a-9671aa907910",
+      "name": "Normalize Text Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1104,
+        1088
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "24b82276-521e-4e8c-9d82-b5398429d80d",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -880,
+        992
+      ],
+      "notes": "Как в референсе: Input 1 = Normalize Voice Input, Input 2 = Normalize Text Input. Срабатывает только одна ветка (If), поэтому на каждый прогон реально есть данные только на одном из входов."
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_2",
+          "mode": "list",
+          "cachedResultName": "Basilik DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "bookings",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "chat_id",
+              "lookupValue": "={{ $('Merge').item.json.chat_id }}"
+            },
+            {
+              "lookupColumn": "reminder_sent",
+              "lookupValue": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fa4462ea-5f53-49bf-96aa-a6eb2f7acd81",
+      "name": "Google Sheets: активная бронь с reminder_sent",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -656,
+        992
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Merge').item.json.callback_data }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              },
+              "id": "59706df8-36dc-43e4-bc43-6aeb9573ab6d"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ecfab99b-c1c6-46a6-896e-d02ad7828537",
+      "name": "Это ответ на напоминание?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -432,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Простейший regex-детект ФИО и телефона (RU/EU). Не претендует на 100% полноту.\nconst item = $('Merge').first().json;\nlet text = item.raw_text || '';\nconst phoneRe = /(\\+?\\d[\\d\\s\\-\\(\\)]{7,}\\d)/g;\nconst nameRe = /\\b([A-ZА-ЯЁ][a-zа-яё]+\\s[A-ZА-ЯЁ][a-zа-яё]+)\\b/g;\nconst phones = [...text.matchAll(phoneRe)].map(m => m[1]);\nconst names = [...text.matchAll(nameRe)].map(m => m[1]);\nlet sanitized = text;\nphones.forEach(p => { sanitized = sanitized.split(p).join('[PHONE]'); });\nnames.forEach(n => { sanitized = sanitized.split(n).join('[NAME]'); });\n\n// Детерминированный ref_token из chat_id — один и тот же гость всегда получает один и тот же\n// токен, без похода в pii_registry за проверкой \"уже есть или нет\".\nfunction simpleHash(str) {\n  let h = 0;\n  for (let i = 0; i < str.length; i++) { h = (Math.imul(31, h) + str.charCodeAt(i)) | 0; }\n  return Math.abs(h).toString(36);\n}\nconst ref_token = 'g_' + simpleHash(String(item.chat_id));\n\nreturn [{ json: { ...item, sanitized_text: sanitized, detected_name: names[0] || null, detected_phone: phones[0] || null, ref_token } }];"
+      },
+      "id": "900cf136-b103-49e6-84e2-01d26e757e87",
+      "name": "Code: PII Detect (regex)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        1008
+      ]
+    },
+    {
+      "parameters": {
+        "model": "groq/compound-mini",
+        "options": {}
+      },
+      "id": "1a2cc28a-b179-4246-ac81-f79c23ea882c",
+      "name": "Groq Chat Model (fallback)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        832,
+        1504
+      ],
+      "credentials": {
+        "groqApi": {
+          "name": "Groq account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=sanitized_text: {{ $('Проверка обезличивания').item.json.sanitized_text }}\nref_token: {{ $json.ref_token }}\nchannel: {{ $('Merge').item.json.channel }}",
+        "hasOutputParser": true,
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "Ты — Router Agent ресторана Базилик (Ristorante Базилик, Berlin). Ты работаешь внутри n8n-системы и НЕ являешься человеком-администратором, но твой тон — как у вежливого, собранного администратора ресторана.\n\nВХОД: sanitized_text (сообщение гостя, PII уже заменены на плейсхолдеры) + ref_token (ссылка на профиль гостя в pii_registry) + флаг canal (text/voice-transcribed) + контекст последних сообщений диалога, если есть.\n\nТВОЯ ЗАДАЧА:\n1. Прочитать сообщение целиком и определить ВСЕ содержащиеся в нём подзадачи. Одно сообщение гостя может содержать несколько тем одновременно (например: бронь + вопрос про аллерген). Не игнорируй ни одну тему.\n2. Для каждой подзадачи вызвать соответствующий инструмент:\n   * booking_worker — новая бронь стола.\n   * menu_allergen_recommendation_worker — состав блюда, аллергены, КБЖУ, цена, рекомендация блюда с учётом ограничений, вопросы про бизнес-ланч/детское меню.\n   * cancellation_reschedule_worker — отмена, перенос брони, вопрос про возврат предоплаты.\n   * faq_worker — общие вопросы о ресторане, не про еду и не про бронь: оплата, свой алкоголь (corkage), дресс-код, питомцы, часы работы/адрес/парковка. Можно вызывать несколько инструментов параллельно в рамках одного сообщения.\n3. Дождаться структурированного ответа от каждого вызванного инструмента.\n4. Собрать черновик единого связного ответа гостю на основе всех reply_draft от вызванных инструментов — не отправляй гостю несколько отдельных сообщений, только один цельный ответ, закрывающий все темы сообщения.\n5. Агрегировать эскалации: если ХОТЯ БЫ один инструмент вернул escalate=true — итоговый needs_escalation = true, и все escalate_reason собираются в список.\n\nЧЕГО ТЫ НЕ ДЕЛАЕШЬ:\n* Не выдумываешь факты о блюдах, аллергенах, цене, доступности стола или политике ресторана — это делают только инструменты через RAG/базу бронирований. Если инструмент не вызывался, у тебя нет права утверждать что-либо об этой теме.\n* Не отправляешь ответ гостю напрямую — твой draft_reply идёт дальше в Critic Agent и Validation Loop, финальную отправку делает система.\n* Не проверяешь фактическую точность по аллергенам — это отдельно делает детерминированный Validator внутри Menu & Allergen Worker, до тебя.\n\nЕсли после вызова инструментов чего-то не хватает для ответа (например, инструмент вернул clarifying_question) — включи этот уточняющий вопрос как часть draft_reply и не помечай needs_escalation=true только из-за уточняющего вопроса (уточнение — это нормальный диалог, а не эскалация).\n\nОбщее правило: язык ответа гостю = язык входящего сообщения гостя (зеркалим); если язык не определяется уверенно — отвечаем по-русски. Валюта всегда €."
+        }
+      },
+      "id": "56a219c1-44ce-489e-afcf-876c3d2da7bd",
+      "name": "AI Agent: Router Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        896,
+        1360
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_2",
+          "mode": "list",
+          "cachedResultName": "Basilik DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "bookings"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "booking_id": "={{ $now.toMillis() }}",
+            "chat_id": "={{ $fromAI('chat_id', 'chat_id гостя из контекста диалога', 'string') }}",
+            "ref_token": "={{ $fromAI('ref_token', 'ref_token гостя из контекста диалога', 'string') }}",
+            "date": "={{ $fromAI('date', 'дата брони YYYY-MM-DD', 'string') }}",
+            "time": "={{ $fromAI('time', 'время брони HH:MM', 'string') }}",
+            "party_size": "={{ $fromAI('party_size', 'число гостей', 'number') }}",
+            "status": "confirmed",
+            "deposit_required": "={{ Number($fromAI('party_size', 'число гостей', 'number')) >= 8 }}",
+            "deposit_amount_eur": "={{ Number($fromAI('party_size', 'число гостей', 'number')) >= 8 ? Number($fromAI('party_size', 'число гостей', 'number')) * 15 : 0 }}",
+            "deposit_status": "={{ Number($fromAI('party_size', 'число гостей', 'number')) >= 8 ? 'pending' : '' }}",
+            "reminder_sent": false,
+            "source_channel": "={{ $fromAI('source_channel', 'text или voice', 'string') }}",
+            "special_requests": "={{ $fromAI('special_requests', 'пожелания гостя, пусто если нет', 'string') }}",
+            "created_at": "={{ $now.toISO() }}",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "booking_id",
+              "displayName": "booking_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ref_token",
+              "displayName": "ref_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "time",
+              "displayName": "time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "party_size",
+              "displayName": "party_size",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deposit_required",
+              "displayName": "deposit_required",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deposit_amount_eur",
+              "displayName": "deposit_amount_eur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deposit_status",
+              "displayName": "deposit_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "payment_intent_id",
+              "displayName": "payment_intent_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reminder_sent",
+              "displayName": "reminder_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source_channel",
+              "displayName": "source_channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "special_requests",
+              "displayName": "special_requests",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "3d917843-0465-44f1-9fd3-0552eea19cba",
+      "name": "Tool: create_booking",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.5,
+      "position": [
+        288,
+        1936
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Создаёт Stripe Payment Link на сумму 15€/чел для депозита. Вход: booking_id, amount_eur, deadline (ISO datetime).",
+        "method": "POST",
+        "url": "https://api.stripe.com/v1/payment_links",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "stripeApi",
+        "sendBody": true,
+        "parametersBody": {
+          "values": [
+            {
+              "name": "line_items[0][price_data][currency]"
+            },
+            {
+              "name": "line_items[0][price_data][unit_amount]",
+              "valueProvider": "fieldValue",
+              "value": "={{ Number($fromAI('party_size', 'число гостей', 'number')) * 15 * 100 }}"
+            },
+            {
+              "name": "line_items[0][price_data][product_data][name]"
+            },
+            {
+              "name": "line_items[0][quantity]"
+            },
+            {
+              "name": "metadata[booking_id]"
+            }
+          ]
+        }
+      },
+      "id": "06527a7b-76e2-4ac0-93f6-5c1cc70d0257",
+      "name": "Tool: create_stripe_payment_link",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        384,
+        1952
+      ],
+      "credentials": {
+        "stripeApi": {
+          "name": "Stripe account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"title\": \"BookingWorkerOutput\",\n  \"type\": \"object\",\n  \"required\": [\n    \"booking_intent\",\n    \"availability_result\",\n    \"deposit_required\",\n    \"escalate\",\n    \"reply_draft\"\n  ],\n  \"properties\": {\n    \"booking_intent\": {\n      \"type\": \"object\",\n      \"required\": [\n        \"date\",\n        \"time\",\n        \"party_size\"\n      ],\n      \"properties\": {\n        \"date\": {\n          \"type\": \"string\",\n          \"format\": \"date\"\n        },\n        \"time\": {\n          \"type\": \"string\",\n          \"pattern\": \"^([01]\\\\d|2[0-3]):[0-5]\\\\d$\"\n        },\n        \"party_size\": {\n          \"type\": \"integer\",\n          \"minimum\": 1\n        },\n        \"special_requests\": {\n          \"type\": [\n            \"string\",\n            \"null\"\n          ]\n        }\n      }\n    },\n    \"availability_result\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"available\",\n        \"unavailable\",\n        \"alternative_offered\"\n      ]\n    },\n    \"alternatives_offered\": {\n      \"type\": [\n        \"array\",\n        \"null\"\n      ],\n      \"items\": {\n        \"type\": \"string\"\n      }\n    },\n    \"booking_id\": {\n      \"type\": [\n        \"string\",\n        \"null\"\n      ]\n    },\n    \"deposit_required\": {\n      \"type\": \"boolean\"\n    },\n    \"deposit_amount_eur\": {\n      \"type\": [\n        \"number\",\n        \"null\"\n      ]\n    },\n    \"payment_link\": {\n      \"type\": [\n        \"string\",\n        \"null\"\n      ]\n    },\n    \"payment_deadline\": {\n      \"type\": [\n        \"string\",\n        \"null\"\n      ],\n      \"format\": \"date-time\"\n    },\n    \"clarifying_question\": {\n      \"type\": [\n        \"string\",\n        \"null\"\n      ]\n    },\n    \"escalate\": {\n      \"type\": \"boolean\"\n    },\n    \"escalate_reason\": {\n      \"type\": [\n        \"string\",\n        \"null\"\n      ],\n      \"enum\": [\n        \"short_notice\",\n        \"no_alternative\",\n        \"banquet\",\n        null\n      ]\n    },\n    \"reply_draft\": {\n      \"type\": \"string\"\n    }\n  }\n}"
+      },
+      "id": "c6396112-ecf1-4e46-88c4-54a4df1cd3b2",
+      "name": "Structured Output Parser (Booking Worker)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        592,
+        1856
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_2",
+          "mode": "list",
+          "cachedResultName": "Basilik DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "bookings",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "ref_token",
+              "lookupValue": "={{ $json.ref_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3b919a64-243b-484b-b488-708d28e284f7",
+      "name": "Tool: find_booking",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.5,
+      "position": [
+        1936,
+        2016
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "General cancellation subworkflow. Idempotent. Handles deposit refund and HITL 'refund_due' internally. Input: {booking_id}.",
+        "workflowId": {
+          "__rl": true,
+          "value": "D55PvRh0GaHG7sEU",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/D55PvRh0GaHG7sEU",
+          "cachedResultName": "Basilik — apply_cancellation (Subworkflow)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "booking_id": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('booking_id', `The booking_id of the reservation to cancel, found via find_booking.`, 'string') }}"
+          },
+          "matchingColumns": [
+            "booking_id"
+          ],
+          "schema": [
+            {
+              "id": "booking_id",
+              "displayName": "booking_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "id": "45eb1c15-cc97-42d0-b591-9170bbf1381b",
+      "name": "Tool: apply_cancellation",
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        2080,
+        2112
+      ],
+      "notes": "ВАЖНО: booking_id этого узла — ОТДЕЛЬНЫЙ файл apply_cancellation.json (переиспользуемый сабворкфлоу из архитектуры). Импортировать его первым и подставить сюда его реальный workflowId."
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"title\": \"CancellationRescheduleWorkerOutput\",\n  \"type\": \"object\",\n  \"required\": [\"action\", \"ambiguous\", \"escalate\", \"reply_draft\"],\n  \"properties\": {\n    \"action\": {\n      \"type\": \"string\",\n      \"enum\": [\"cancel\", \"reschedule\", \"refund_inquiry\"]\n    },\n    \"booking_id\": {\n      \"type\": [\"string\", \"null\"]\n    },\n    \"ambiguous\": {\n      \"type\": \"boolean\"\n    },\n    \"clarifying_question\": {\n      \"type\": [\"string\", \"null\"]\n    },\n    \"new_date\": {\n      \"type\": [\"string\", \"null\"]\n    },\n    \"new_time\": {\n      \"type\": [\"string\", \"null\"]\n    },\n    \"refund_due\": {\n      \"type\": [\"boolean\", \"null\"]\n    },\n    \"escalate\": {\n      \"type\": \"boolean\"\n    },\n    \"escalate_reason\": {\n      \"type\": [\"string\", \"null\"]\n    },\n    \"reply_draft\": {\n      \"type\": \"string\"\n    }\n  }\n}"
+      },
+      "id": "52db0684-bada-40c5-9701-3074cea13cbb",
+      "name": "Structured Output Parser (Cancellation Worker)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        2176,
+        1936
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"title\": \"FAQWorkerOutput\",\n  \"type\": \"object\",\n  \"required\": [\n    \"question_type\",\n    \"answer_confidence\",\n    \"escalate\",\n    \"reply_draft\",\n    \"source_section_titles\"\n  ],\n  \"properties\": {\n    \"question_type\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"payment\",\n        \"corkage\",\n        \"dress_code\",\n        \"pets\",\n        \"hours_location\",\n        \"out_of_scope\"\n      ]\n    },\n    \"answer_confidence\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"certain\",\n        \"unresolved\"\n      ]\n    },\n    \"escalate\": {\n      \"type\": \"boolean\"\n    },\n    \"escalate_reason\": {\n      \"type\": [\n        \"string\",\n        \"null\"\n      ],\n      \"enum\": [\n        \"faq_unresolved\",\n        null\n      ]\n    },\n    \"reply_draft\": {\n      \"type\": \"string\"\n    },\n    \"source_section_titles\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  }\n}"
+      },
+      "id": "93c7c3a5-0ac1-4cc7-b877-879cd76a84dc",
+      "name": "Structured Output Parser (FAQ Worker)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        2960,
+        1936
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Исходное сообщение гостя (sanitized_text): {{ $('AI Agent: Router Agent').item.json.sanitized_text || $('Code: PII Detect (regex)').item.json.sanitized_text }}\ntask_types: {{ $('AI Agent: Router Agent').item.json.output.task_types.join(', ') }}\ndraft_reply: {{ $('AI Agent: Router Agent').item.json.output.draft_reply }}\niteration: {{ $if($('Set: увеличить итерацию Critic').isExecuted, $('Set: увеличить итерацию Critic').item.json.iteration, 1) }}",
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "Ты — Critic (судья) в системе поддержки ресторана Базилик. Тебе не нужно\nотвечать гостю — твоя задача: оценить черновик ответа, который Router Agent\nсобрал из ответов worker-агентов (Booking / Menu&Allergen&Recommendation /\nCancellation&Reschedule / FAQ), и решить: достаточно ли он хорош, чтобы\nиспользовать как есть.\n\nНа вход ты получаешь:\n- исходное сообщение гостя (sanitized_text, может содержать ref_token\n  вместо имени/телефона — это нормально, не пытайся его расшифровать)\n- список task_types, которые Router определил в сообщении\n- черновик ответа (draft_reply), собранный Router'ом из ответов worker'ов\n  (может содержать тег [ESCALATE:reason] в конце — это штатная эскалация\n  от самого worker'а/Router'а, не ошибка сама по себе)\n\nОЦЕНКА ЧЕРНОВИКА. Пять критериев, максимум 5 баллов:\n- Полнота (0-2). Закрыты ли ВСЕ темы из исходного сообщения гостя? Если\n  сообщение было составным (например бронь + вопрос по аллергену), а в\n  draft_reply есть ответ только на часть — это провал. 2 — все темы\n  закрыты, 1 — закрыта часть, 0 — не закрыта ни одна по существу.\n- Связность (0-1). Не противоречит ли одна часть ответа другой (например\n  разное время визита в разных местах текста)?\n- Тон (0-1). Вежливый, спокойный, без канцелярита, стиль ресторана\n  среднего+ сегмента.\n- Язык (0-1). Ответ на языке сообщения гостя.\n\nЖЁСТКОЕ ПРАВИЛО (нарушение обнуляет ВЕСЬ ответ, ОЦЕНКА = 0, независимо\nот баллов выше):\n- Черновик обещает возврат денег, компенсацию, скидку или подтверждает\n  возврат депозита БЕЗ пометки [ESCALATE:refund_due] — движение денег\n  без эскалации человеку запрещено, это не зона ответственности worker'ов.\n- Черновик содержит данные, похожие на данные ДРУГОГО гостя (другое имя,\n  другой ref_token, не относящийся к текущему обращению).\n- Черновик прямо противоречит тому, что логично было получить из RAG/базы\n  (например утверждает про блюдо то, чего нет в меню/базе аллергенов).\n\nТЫ НЕ ПРОВЕРЯЕШЬ: фактическую точность по аллергенам (отдельный\nдетерминированный Validator уже отработал внутри Menu Worker до тебя),\nправильность выбора worker-агента Router'ом (это его зона).\n\nРЕШЕНИЕ:\n- Жёсткое нарушение → REVISE_CONTENT, ОЦЕНКА: 0.\n- Нет жёсткого нарушения И ОЦЕНКА >= 4 из 5 → APPROVE (это верно и для\n  штатных эскалаций worker'а — если черновик корректно эскалирует,\n  это APPROVE, не REVISE).\n- Нет жёсткого нарушения И ОЦЕНКА < 4 → REVISE_CONTENT.\n\nФормат ответа — строго обычный текст, ВСЕГДА ровно 4 строки в этом\nпорядке, без JSON, без markdown, без пояснений до или после:\nОЦЕНКА: <число 0-5>\nОБОСНОВАНИЕ: <2-4 предложения — что хорошо, что плохо>\nРЕКОМЕНДАЦИЯ: <что конкретно исправить, или \"нет\" если ОЦЕНКА >= 4>\n[DECISION:APPROVE] или [DECISION:REVISE_CONTENT]\n\nПример 1 (APPROVE):\nОбращение: «Столик на 2 человека сегодня в 20:00, и есть ли у вас блюда без глютена?»\nЧерновик: «Забронировали столик на 2 человека сегодня на 20:00. Из безглютеновых у нас: ризотto с грибами и стейк с овощами гриль.»\nТвой ответ:\nОЦЕНКА: 5\nОБОСНОВАНИЕ: Обе темы составного сообщения закрыты — и бронь, и вопрос по аллергену. Тон нейтрально-деловой, без лишнего. Связность в порядке.\nРЕКОМЕНДАЦИЯ: нет\n[DECISION:APPROVE]\n\nПример 2 (REVISE_CONTENT — жёсткое правило):\nОбращение: «Отменяю бронь, было поздно предупредить, но верните хотя бы часть депозита.»\nЧерновик: «Хорошо, отменяем бронь. Вернём вам половину депозита в качестве исключения.»\nТвой ответ:\nОЦЕНКА: 0\nОБОСНОВАНИЕ: Черновик сам обещает частичный возврат депозита без пометки [ESCALATE:refund_due] — прямое нарушение правила о движении денег, обнуляет весь ответ независимо от остальных плюсов.\nРЕКОМЕНДАЦИЯ: Убери обещание возврата. Сообщи, что бронь отменена, а вопрос по депозиту передан администратору, и проставь [ESCALATE:refund_due].\n[DECISION:REVISE_CONTENT]"
+        }
+      },
+      "id": "9af7e076-3877-4810-a971-c66c4295d7b4",
+      "name": "AI Agent: Critic Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        3968,
+        1360
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.passed === true || parseInt(String($json.iteration).replace(/\\D/g,''), 10) >= 2 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "id": "bc504b3c-df20-4623-9313-b13031861130"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "877941ed-b57c-497c-9c68-f901da3f0b50",
+      "name": "If: Critic passed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4752,
+        1360
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.pii_leak_detected }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "id": "df93a952-295e-4097-b05e-a5e577daf593"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "128ca1b8-76b9-4143-baee-476a01991c3d",
+      "name": "If: утечка PII?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3200,
+        1088
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst item = $input.item.json;\n\nconst explicitEscalate = item.escalate === true;\nconst explicitReason = item.escalate_reason || null;\nconst routerEscalate = item.router_needs_escalation === true;\n\nconst criticDecision = item.decision || null;\nconst criticScore = item.score || null;\nconst criticReasoning = item.reasoning || null;\nconst criticRecommendation = item.recommendation || null;\nconst criticIteration = parseInt(String(item.iteration || '0').replace(/\\D/g,''), 10) || 0;\nconst criticExhausted = criticDecision === 'REVISE_CONTENT' && criticIteration >= 2;\n\nconst finalText = item.final_reply_text || item.router_draft_reply || '';\nconst moneyRe = /(депозит|предоплат|возврат|refund|payment link|€\\s?\\d|stripe)/i;\nconst moneyMentioned = moneyRe.test(finalText);\n\nconst needsHuman = explicitEscalate || routerEscalate || moneyMentioned || criticExhausted;\nconst reasons = [\n  explicitReason,\n  criticExhausted ? 'system_error' : null,\n  ...(item.router_escalation_reasons || [])\n].filter(Boolean);\n\nreturn [{ json: {\n  needs_human: needsHuman,\n  conversation_log_id: Date.now(),\n  escalation_reasons: reasons,\n  final_reply_text: finalText,\n  ref_token: item.pii_ref_token,\n  chat_id: item.pii_chat_id,\n  channel: item.pii_channel,\n  guest_message_sanitized: item.pii_sanitized_text,\n  critic_decision: criticDecision,\n  critic_score: criticScore,\n  critic_reasoning: criticReasoning,\n  critic_recommendation: criticRecommendation,\n  critic_iteration: criticIteration\n} }];"
+      },
+      "id": "ebaddbc8-0df1-4999-95ab-e776a07ec21d",
+      "name": "Code: вычислить needs_human",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5600,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "speech",
+        "operation": "speechToText",
+        "additionalOptions": {},
+        "requestOptions": {}
+      },
+      "id": "b73a1e74-bc76-481d-9432-c0bd9f2b8b8f",
+      "name": "STT: Speech Recognition (ElevenLabs)",
+      "type": "@elevenlabs/n8n-nodes-elevenlabs.elevenLabs",
+      "typeVersion": 1,
+      "position": [
+        -1328,
+        896
+      ],
+      "credentials": {
+        "elevenLabsApi": {
+          "name": "ElevenLabs account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        688,
+        1456
+      ],
+      "id": "19fcf4c8-0708-454d-b92b-6ed03be6dd64",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.item.json;\nlet text = item.sanitized_text || '';\nconst phoneRe = /(\\+?\\d[\\d\\s\\-\\(\\)]{7,}\\d)/g;\nconst nameRe = /\\b([A-ZА-ЯЁ][a-zа-яё]+\\s[A-ZА-ЯЁ][a-zа-яё]+)\\b/g;\ntext = text.replace(phoneRe, '[PHONE]').replace(nameRe, '[NAME]');\nreturn [{ json: { ...item, sanitized_text: text } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        288,
+        1008
+      ],
+      "id": "46dc8fd3-40a6-47ad-baea-65515f4067bd",
+      "name": "Проверка обезличивания"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        16,
+        1792
+      ],
+      "id": "d773dace-6476-44ea-8247-d32e16bfa5a4",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "qwen/qwen3.6-27b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        176,
+        1888
+      ],
+      "id": "e6619275-6930-4330-9d91-de2ee2fb3cec",
+      "name": "Groq Chat Model1",
+      "credentials": {
+        "groqApi": {
+          "name": "Groq account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=={{ $('Merge').item.json.chat_id }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        992,
+        1520
+      ],
+      "id": "231b30d5-f993-4f92-89e9-88e35c69846a",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"draft_reply\": {\n      \"type\": \"string\"\n    },\n    \"needs_escalation\": {\n      \"type\": \"boolean\"\n    },\n    \"escalate_reason\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"string\"\n      }\n    }\n  },\n  \"required\": [\"draft_reply\", \"needs_escalation\"]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1280,
+        1488
+      ],
+      "id": "9cd9e41a-fe14-4e17-8d9e-7ccf218063d0",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "toolDescription": "New table booking: date, time, party size, special requests. NOT for cancellations or reschedules.",
+        "text": "=Guest message fragment about booking: {{ $('Проверка обезличивания').item.json.sanitized_text }}\nref_token: {{ $json.ref_token }}\nchat_id: {{ $json.chat_id }}\nchannel: {{ $('Merge').item.json.channel }}\ncurrent date/time: {{ $now.toISO() }}",
+        "hasOutputParser": true,
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "Ты — Booking Worker, специализированный агент ресторана Базилик. Тебя вызывает Router только для НОВЫХ броней стола. Отмену и перенос ты не обрабатываешь — для этого есть Cancellation & Reschedule Worker.\n\nВХОД: фрагмент sanitized_text, относящийся к бронированию (дата, время, число гостей, пожелания), ref_token.\n\nАЛГОРИТМ:\n1. Извлеки из текста: дату, время, число гостей. Если дата/время неполные (\"суббота вечером\") — сконвертируй в конкретную дату/время относительно текущей даты и разумных предположений (вечер = 18:00–21:00, предложи 19:00 если не уточнено, но явно скажи гостю какое время ты подставил).current date/time (текущая дата и время) передаётся тебе отдельным полем в промпте — используй ТОЛЬКО его как точку отсчёта для \"сегодня\"/\"завтра\"/\"суббота\" и т.д. Пример \"суббота вечером\" / 19:00 в этой инструкции — это ТОЛЬКО иллюстрация формата рассуждения, а не реальные данные. Никогда не используй значения из примеров как факты о текущем запросе. Если в сообщении гостя явно указаны дата и/или время (например \"сегодня на 20:00\") — используй именно их буквально, не заменяй своими предположениями.\n2. Если гостей ≥ 15 — это банкет. Банкетная бронь оформляется минимум за 3 дня и требует индивидуального обсуждения меню и зоны с администратором. Не бронируй банкет самостоятельно: зафиксируй как заявку, но поставь escalate=true, escalate_reason=\"banquet\".\n3. Проверки занятости стола нет (сознательное упрощение MVP — реальных данных о вместимости зала нет). Как только известны дата, время и число гостей — сразу вызови tool create_booking(...) и получи реальный booking_id из его ответа. availability_result всегда = \"available\". Никогда не придумывай booking_id сам — используй только то, что вернул tool.\n4. Если party_size ≥ 8 (и бронь создана): требуется предоплата 15 €/чел.\n   * Рассчитай дедлайн оплаты: если время визита более чем через 24 часа — дедлайн = created_at + 24 часа. Если визит менее чем через 24 часа — escalate=true, escalate_reason=\"short_notice\".\n   * ОБЯЗАТЕЛЬНО вызови tool create_stripe_payment_link(booking_id, amount = 15 × party_size, deadline) — не придумывай payment_link сам, используй только реальную ссылку из ответа tool'а.\n   * deposit_status на этом шаге = \"pending\".\n5. После успешного создания брони (шаг 3) ОБЯЗАТЕЛЬНО вызови tool trigger_reminder_workflow(booking_id) — запускает напоминание за 2 часа до визита (fire-and-forget, не жди содержательного ответа от этого инструмента, но вызов должен реально произойти).\n6. Составь reply_draft: понятное подтверждение (или объяснение эскалации/уточняющий вопрос), на языке сообщения гостя, без канцелярита.\n\nЧЕГО ТЫ НЕ ДЕЛАЕШЬ: не обрабатываешь отмену/перенос; никогда не указываешь booking_id, payment_link или подтверждение брони, если соответствующий tool не был реально вызван; не подтверждаешь оплату сам — только создаёшь ссылку.\n\nФОРМАТ ВЫВОДА — строго один JSON-объект: {booking_intent, availability_result, alternatives_offered, booking_id, deposit_required, deposit_amount_eur, payment_link, payment_deadline, clarifying_question, escalate, escalate_reason, reply_draft}\n\nВАЖНО: прежде чем сформировать финальный JSON, ты ОБЯЗАН реально вызвать create_booking (шаг 3), а если party_size ≥ 8 — ещё и create_stripe_payment_link (шаг 4), и после успешной брони — trigger_reminder_workflow (шаг 5). Никогда не заполняй booking_id, payment_link или reply_draft с подтверждением брони без реальных вызовов tools. Если ты не вызвал tool — это ошибка, а не допустимый короткий путь.Создаёт Stripe Payment Link на сумму 15€/чел для депозита. ВЫЗЫВАТЬ ТОЛЬКО если party_size >= 8. Для групп меньше 8 человек депозит не требуется — НЕ вызывать этот tool. Вход: booking_id, amount_eur, deadline (ISO datetime)."
+        }
+      },
+      "id": "1dc35646-c33b-41a2-8a2e-be66a42b78b4",
+      "name": "booking_worker",
+      "type": "@n8n/n8n-nodes-langchain.agentTool",
+      "typeVersion": 3,
+      "position": [
+        144,
+        1728
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Cancellation, reschedule of an existing booking, deposit refund question.",
+        "text": "=Guest message fragment about cancellation/reschedule: {{ $('Проверка обезличивания').item.json.sanitized_text }}\nref_token: {{ $json.ref_token }}\nchannel: {{ $('Merge').item.json.channel }}",
+        "hasOutputParser": true,
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "Ты — Cancellation & Reschedule Worker ресторана Базилик. Тебя вызывает Router для отмены, переноса существующей брони или вопроса про возврат предоплаты.\n\nВХОД: фрагмент sanitized_text, ref_token.\n\nАЛГОРИТМ:\n1. Вызови find_booking(ref_token) — найди активные брони гостя.\n   * Ровно одна активная бронь → используй её.\n   * Ноль активных броней → сообщи, что активной брони не нашлось, уточни детали, escalate=false, clarifying_question заполнен.\n   * Несколько активных броней ИЛИ неочевидно из контекста → задай ОДИН уточняющий вопрос. Если после одного уточнения всё ещё неоднозначно — ambiguous=true, escalate=true, escalate_reason=\"ambiguous\".\n2. Определи action: \"cancel\", \"reschedule\" или \"refund_inquiry\" (просто вопрос про возврат, без вызова apply_cancellation, если гость ещё не подтвердил отмену).\n3. Если party_size исходной брони ≥ 15 (банкет) — escalate=true, escalate_reason=\"banquet\".\n4. action=\"cancel\": вызови apply_cancellation(booking_id). Логика возврата и HITL для денег — ВНУТРИ сабворкфлоу, ты просто передаёшь его результат дальше в reply_draft, ничего не решаешь про деньги сам.\n5. action=\"reschedule\": извлеки новый слот. Вызови check_availability(new_date, new_time, party_size исходной брони).\n   * available → вызови apply_cancellation(старый booking_id), затем создай новую бронь на новый слот тем же путём, что Booking Worker (через create_booking).\n   * unavailable → предложи альтернативы ±1 час, или уточняющий вопрос.\n6. Составь reply_draft на языке гостя, спокойный и точный тон, особенно при отказе в возврате — объясняй причину (политика 3 часов), а не просто \"нет\".\n\nЧЕГО ТЫ НЕ ДЕЛАЕШЬ: не обрабатываешь НОВУЮ бронь без связи с существующей, не решаешь сам, возвращать ли предоплату.\n\nФОРМАТ ВЫВОДА — строго один JSON-объект: {action, booking_id, ambiguous, clarifying_question, new_slot_requested, new_availability_result, cancellation_subworkflow_result, escalate, escalate_reason, reply_draft}"
+        }
+      },
+      "id": "df632b6c-4b7d-420b-a206-1b83f59a8d4c",
+      "name": "cancellation_reschedule_worker",
+      "type": "@n8n/n8n-nodes-langchain.agentTool",
+      "typeVersion": 3,
+      "position": [
+        1840,
+        1808
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Общие вопросы: оплата, corkage, дресс-код, питомцы, часы работы/адрес/парковка. Не для еды и не для брони.",
+        "text": "=Фрагмент сообщения гостя (общий вопрос): {{ $('Проверка обезличивания').item.json.sanitized_text }}\nref_token: {{ $json.ref_token }}\ncanal: {{ $('Merge').item.json.channel }}",
+        "hasOutputParser": true,
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "Ты — FAQ Worker ресторана Базилик. Ты отвечаешь на общие вопросы о работе ресторана, не связанные напрямую с едой или бронированием: оплата и способы оплаты, можно ли принести своё вино (corkage) и на каких условиях, дресс-код и атмосфера, можно ли прийти с животным, часы работы, адрес и парковка.\n\nВХОД: фрагмент sanitized_text с вопросом, ref_token. Используй search_policy_faq для RAG-поиска.\n\nЧТО НЕ ВХОДИТ В ТВОЮ ЗОНУ (если Router всё же передал такой вопрос — question_type=\"out_of_scope\", escalate=false, в reply_draft честно скажи, что переключаешь на нужную тему, не пытайся ответить сам):\n* Бронирование, отмена, перенос, банкеты, напоминания — Booking / Cancellation Worker.\n* Бизнес-ланч, детское меню, состав блюд, аллергены, КБЖУ, рекомендации — Menu & Allergen & Recommendation Worker.\n\nАЛГОРИТМ:\n1. Найди ответ в RAG-контексте через search_policy_faq.\n2. Если контекст даёт точный ответ — answer_confidence=\"certain\", отвечай точно по тексту политики, не додумывай деталей (например конкретную сумму corkage fee бери дословно).\n3. Если вопрос по теме твоей зоны, но конкретного ответа в контексте нет — answer_confidence=\"unresolved\", escalate=true, escalate_reason=\"faq_unresolved\" (некритичная эскалация — не деньги, не здоровье, но выдумывать нельзя).\n4. Составь reply_draft на языке гостя.\n\nФОРМАТ ВЫВОДА — строго один JSON-объект: {question_type, answer_confidence, escalate, escalate_reason, reply_draft, source_section_titles}"
+        }
+      },
+      "id": "18bd336d-1fa1-43cd-9783-53ec079c1bab",
+      "name": "faq_worker",
+      "type": "@n8n/n8n-nodes-langchain.agentTool",
+      "typeVersion": 3,
+      "position": [
+        2624,
+        1792
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Dish ingredients, allergens, nutritional info, price, recommendations based on dietary restrictions, business lunch, kids' menu.",
+        "text": "=Guest message fragment about menu/allergens: {{ $('Проверка обезличивания').item.json.sanitized_text }}\nref_token: {{ $json.ref_token }}\nchannel: {{ $('Merge').item.json.channel }}",
+        "hasOutputParser": true,
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "Ты — Menu & Allergen & Recommendation Worker ресторана Базилик. Ты отвечаешь на все вопросы о блюдах: состав, аллергены, КБЖУ, цена, вес, а также подбираешь рекомендации блюд с учётом ограничений гостя (вегетарианец, веган, аллергия, диета). Также отвечаешь на вопросы про бизнес-ланч и детское меню (эти данные тоже есть в базе знаний).\n\nВХОД: фрагмент sanitized_text с вопросом о блюде/меню, ref_token, результаты RAG-поиска — top-k релевантных карточек блюд из коллекции basilik_menu и/или фрагментов политики из коллекции basilik_policy (разделы «Бизнес-ланч», «Детское меню»).\n\nЖЁСТКОЕ ПРАВИЛО ПРО АЛЛЕРГЕНЫ (приоритет №1 в этой системе — цена ошибки здесь это здоровье гостя):\n- Перед тем как заполнить allergens_stated — ОБЯЗАТЕЛЬНО вызови инструмент validate_allergens для каждого блюда из dish_refs, даже если ты уже нашёл информацию через search_menu. allergens_stated формируй ТОЛЬКО из результата validate_allergens, не из текста search_menu.\nСписок аллергенов блюда — ТОЛЬКО дословно из поля allergens карточки Qdrant (коллекция basilik_menu). Никогда не переформулируй, не сокращай и не \"досочиняй по составу\" — если состав включает сливки, но в поле allergens этого нет явно, ты всё равно берёшь ровно то, что в поле allergens.\nЕсли вопрос касается блюда, чьи аллергены ЗАВИСЯТ от выбора гостя (сейчас в базе это только Стейк Рибай — аллергены зависят от соуса, единого списка нет, variant_dependent=true) — НЕ давай уверенный ответ. Задай ОДИН уточняющий вопрос (какой соус гость выбирает). Если это первая попытка — answer_confidence=\"needs_clarification\", clarifying_question заполнен, escalate=false. Если гость уже отвечал и всё равно нет однозначного ответа в базе — answer_confidence=\"unresolved\", escalate=true, escalate_reason=\"allergen_unresolved\".\nЕсли ограничение относится к третьему лицу (например: \"у моего ребёнка аллергия на яйца\") — отвечай с той же строгостью и точностью, как если бы аллергия была у самого пишущего.\nНикогда не пиши \"скорее всего нет [аллергена]\" или аналогичные вероятностные формулировки про аллергены — либо точный ответ из базы, либо уточняющий вопрос, либо эскалация. Третьего не дано.\n\nРЕКОМЕНДАЦИИ:\n\nПри запросе на подбор блюда — отфильтруй карточки меню по ограничению гостя (vegetarian/vegan флаги + отсутствие нужного аллергена в поле allergens) и предложи 2–3 варианта с названием, ценой и одной строкой \"почему подходит\".\nНикогда не рекомендуй блюдо, чьи аллергены не проверены (вариативные блюда типа стейка исключай из рекомендаций для гостей с аллергией, если только гость явно не готов уточнять состав соуса отдельно).\n\nОБЩИЕ ВОПРОСЫ (бизнес-ланч, детское меню, состав/цена без аллергии):\n\nОтвечай по данным из RAG-контекста (basilik_menu или basilik_policy). Если в контексте нет ответа — не выдумывай, скажи, что уточнишь (answer_confidence=\"unresolved\", без эскалации, если тема не про здоровье).\n\nФОРМАТ ВЫВОДА — строго один JSON-объект:\n\n{\n\n  \"question_type\": \"composition\" | \"allergen\" | \"kcal_price\" | \"recommendation\" | \"general_info\",\n\n  \"dish_refs\": [\"item_id\", ...],\n\n  \"answer_confidence\": \"certain\" | \"needs_clarification\" | \"unresolved\",\n\n  \"clarifying_question\": string | null,\n\n  \"allergens_stated\": [\"строка_из_поля_allergens\", ...],\n\n  \"recommended_items\": [ { \"item_id\": string, \"name\": string, \"price_eur\": number, \"reason\": string } ] | null,\n\n  \"escalate\": true | false,\n\n  \"escalate_reason\": \"allergen_unresolved\" | null,\n\n  \"reply_draft\": string,\n\n  \"source_item_ids\": [\"item_id\", ...]\n\n}\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agentTool",
+      "typeVersion": 3,
+      "position": [
+        960,
+        1840
+      ],
+      "id": "a6052c76-ffef-4008-b285-424f81a4d707",
+      "name": "menu_allergen_recommendation_worker"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        864,
+        1968
+      ],
+      "id": "90690bb0-e9f8-4e29-b58e-9fdf543c2dfb",
+      "name": "OpenRouter Chat Model2",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "qwen/qwen3.6-27b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        880,
+        2160
+      ],
+      "id": "2e63cf38-5e88-4ee2-b89e-d1cfe9a86198",
+      "name": "Groq Chat Model2",
+      "credentials": {
+        "groqApi": {
+          "name": "Groq account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"required\": [\"question_type\", \"dish_refs\", \"answer_confidence\", \"allergens_stated\", \"escalate\", \"reply_draft\", \"source_item_ids\"],\n  \"properties\": {\n    \"question_type\": {\n      \"type\": \"string\",\n      \"enum\": [\"composition\", \"allergen\", \"kcal_price\", \"recommendation\", \"general_info\"]\n    },\n    \"dish_refs\": {\n      \"type\": \"array\",\n      \"items\": { \"type\": \"string\" }\n    },\n    \"answer_confidence\": {\n      \"type\": \"string\",\n      \"enum\": [\"confident\", \"needs_clarification\"]\n    },\n    \"clarifying_question\": {\n      \"type\": [\"string\", \"null\"]\n    },\n    \"allergens_stated\": {\n      \"type\": \"array\",\n      \"items\": { \"type\": \"string\" }\n    },\n    \"recommended_items\": {\n      \"type\": [\"array\", \"null\"],\n      \"items\": { \"type\": \"string\" }\n    },\n    \"escalate\": {\n      \"type\": \"boolean\"\n    },\n    \"escalate_reason\": {\n      \"type\": [\"string\", \"null\"]\n    },\n    \"reply_draft\": {\n      \"type\": \"string\"\n    },\n    \"source_item_ids\": {\n      \"type\": \"array\",\n      \"items\": { \"type\": \"string\" }\n    }\n  }\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1360,
+        2000
+      ],
+      "id": "c7304525-d9ee-498d-9ea0-aec213887439",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "RAG search over dish cards in the basilik_menu collection (ingredients, allergens, price, nutritional info, vegetarian/vegan flags, variant_dependent).",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "basilik_menu",
+          "mode": "list",
+          "cachedResultName": "basilik_menu"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        976,
+        2096
+      ],
+      "id": "8836f36c-ad1b-4b0c-9ad9-481adff8aeac",
+      "name": "search_menu",
+      "credentials": {
+        "qdrantApi": {
+          "name": "Qdrant account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "RAG search over the 'Business lunch' and 'Kids menu' sections of the basilik_policy collection — conditions not covered in the dish cards.",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "basilik_policy",
+          "mode": "list",
+          "cachedResultName": "basilik_policy"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        1216,
+        2192
+      ],
+      "id": "09fc2c10-a319-4f38-b32c-2828b284df87",
+      "name": "search_policy_menu_sections",
+      "credentials": {
+        "qdrantApi": {
+          "name": "Qdrant account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1184,
+        2352
+      ],
+      "id": "46530730-2a55-4242-9394-bfafa26f4cdc",
+      "name": "Embeddings OpenAI2",
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "MANDATORY allergen-check tool. Call it for EVERY dish you mention with allergen information — pass the exact dish name as the query. Returns the dish card with the allergens field — the single source of truth. Never derive allergens_stated from search_menu's text, only from this tool's result.",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "basilik_menu",
+          "mode": "list",
+          "cachedResultName": "basilik_menu"
+        },
+        "topK": 1,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        1440,
+        2304
+      ],
+      "id": "bb46ddea-40f8-43ff-a1a1-d6ae85f86e6a",
+      "name": "validate_allergens",
+      "credentials": {
+        "qdrantApi": {
+          "name": "Qdrant account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1728,
+        2032
+      ],
+      "id": "74a143e5-7250-46c1-8597-beb8741660bb",
+      "name": "OpenRouter Chat Model3",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "qwen/qwen3.6-27b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1824,
+        2000
+      ],
+      "id": "f5413840-02b0-4ca0-9181-8243c7e645c9",
+      "name": "Groq Chat Model3",
+      "credentials": {
+        "groqApi": {
+          "name": "Groq account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        2480,
+        1920
+      ],
+      "id": "a4040bf9-bef3-4d4c-8a53-4a585b915324",
+      "name": "OpenRouter Chat Model4",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "groq/compound-mini",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        2592,
+        1952
+      ],
+      "id": "a856bd79-da77-4c95-a520-d59779a39423",
+      "name": "Groq Chat Model4",
+      "credentials": {
+        "groqApi": {
+          "name": "Groq account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        2816,
+        2160
+      ],
+      "id": "a50af409-3149-4098-953d-93331e44ee51",
+      "name": "Embeddings OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "RAG search over the 'Payment', 'Bring your own alcohol (corkage)', 'Dress code and atmosphere', 'Pets', and 'Opening hours, address and parking' sections of the basilik_policy collection.",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "basilik_policy",
+          "mode": "list",
+          "cachedResultName": "basilik_policy"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        2688,
+        1952
+      ],
+      "id": "dd86bd1f-6b18-4a48-ae75-64ef1b670efe",
+      "name": "search_policy_faq",
+      "credentials": {
+        "qdrantApi": {
+          "name": "Qdrant account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-5",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        3792,
+        1568
+      ],
+      "id": "8c62a831-d5de-4aa7-ae4a-cc0433b49e39",
+      "name": "OpenRouter Chat Model5",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const draft = $json.draft_reply || $json.output || '';\n\nconst phoneRegex = /\\+?\\d[\\d\\s\\-\\(\\)]{7,}\\d/;\nconst emailRegex = /[\\w.+-]+@[\\w-]+\\.[a-zA-Z]{2,}/;\n\nconst leaked = phoneRegex.test(draft) || emailRegex.test(draft);\n\nreturn [{\n  json: {\n    ...$json,\n    pii_leak_detected: leaked,\n    escalate: leaked ? true : ($json.escalate || false),\n    escalate_reason: leaked ? 'system_error' : ($json.escalate_reason || null)\n  }\n}];"
+      },
+      "id": "0a4682bd-03fc-4200-8e68-8571a198f6b6",
+      "name": "Code: PII-leak check (compact)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2912,
+        1088
+      ]
+    },
+    {
+      "parameters": {
+        "model": "groq/compound",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        3968,
+        1632
+      ],
+      "id": "fe1570cf-8492-4d96-a74b-3f7bdc22b568",
+      "name": "Groq Chat Model5",
+      "credentials": {
+        "groqApi": {
+          "name": "Groq account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.output || $json.text || '';\n\nconst decisionMatch = raw.match(/\\[DECISION:([A-Z_]+)\\]/);\nconst scoreMatch = raw.match(/ОЦЕНКА:\\s*(.+)/);\nconst reasonMatch = raw.match(/ОБОСНОВАНИЕ:\\s*(.+)/);\nconst recMatch = raw.match(/РЕКОМЕНДАЦИЯ:\\s*(.+)/);\n\nconst decision = decisionMatch ? decisionMatch[1] : 'REVISE_CONTENT';\nconst passed = decision === 'APPROVE';\n\nreturn [{\n  json: {\n    ...$json,\n    passed,\n    decision,\n    score: scoreMatch ? scoreMatch[1].trim() : null,\n    reasoning: reasonMatch ? reasonMatch[1].trim() : null,\n    recommendation: recMatch ? recMatch[1].trim() : null\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4320,
+        1360
+      ],
+      "id": "aae64c63-41bc-4273-923f-cb03e3a81cc6",
+      "name": "Code: parse Critic output"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "83b72a8c-3f94-4456-9ed1-0b5757fa99cd",
+              "name": "iteration",
+              "value": "={{ ($json.iteration || 1) + 1 }}",
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        4768,
+        2336
+      ],
+      "id": "8f71ef27-112d-4f3e-a4b5-ab470074f25a",
+      "name": "Set: увеличить итерацию Critic"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Code: вычислить needs_human').item.json.needs_human }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "id": "3a19b83e-fb18-4cb0-a18c-8cf493a1ae37"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c2386b30-203b-456c-a790-4d564806dbdb",
+      "name": "If: needs_human?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        6224,
+        1312
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Code: вычислить needs_human').first().json.channel }}",
+              "rightValue": "voice",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "id": "08460a7b-1af0-48fd-9855-42966060dad5"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "fc8ebc3a-26d3-4c42-95e8-2bc90e68dd3f",
+      "name": "If: канал = voice? (основной)1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        6416,
+        1840
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Code: вычислить needs_human').first().json.chat_id }}",
+        "text": "={{ $('Code: вычислить needs_human').first().json.final_reply_text }}",
+        "additionalFields": {}
+      },
+      "id": "c8591bdf-051f-41e6-b2b4-d5ad0705f75f",
+      "name": "Telegram: отправить текст гостю1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        6864,
+        2000
+      ],
+      "webhookId": "e1199470-bbc8-4557-a7b8-5dbd1c74d89a",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_2",
+          "mode": "list",
+          "cachedResultName": "Basilik DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "operation_log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "operation_id": "={{ $now.toMillis() }}",
+            "timestamp": "={{ $now.toISO() }}",
+            "chat_id": "={{ $('Code: вычислить needs_human').item.json.chat_id }}",
+            "ref_token": "={{ $('Code: вычислить needs_human').item.json.ref_token }}",
+            "channel": "={{ $('Code: вычислить needs_human').item.json.channel }}",
+            "task_types": "={{ $('Code: вычислить needs_human').item.json.task_types.join(',') }}",
+            "tools_called": "={{ $('Code: вычислить needs_human').item.json.tools_called.join(',') }}",
+            "model_used": "openrouter",
+            "status": "auto_sent",
+            "conversation_log_id": "={{ $('Code: вычислить needs_human').item.json.conversation_log_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "operation_id",
+              "displayName": "operation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ref_token",
+              "displayName": "ref_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "task_types",
+              "displayName": "task_types",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tools_called",
+              "displayName": "tools_called",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "latency_ms",
+              "displayName": "latency_ms",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tokens_used",
+              "displayName": "tokens_used",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "cost_eur",
+              "displayName": "cost_eur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "model_used",
+              "displayName": "model_used",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "escalation_id",
+              "displayName": "escalation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "conversation_log_id",
+              "displayName": "conversation_log_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "5667e2ff-aa1f-49f4-bd9e-206c9e324736",
+      "name": "Google Sheets: append operation_log (auto_sent)1",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        7856,
+        1920
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "chatId": "=YOUR_TELEGRAM_CHAT_ID",
+        "message": "=🚨 Новая эскалация: {{ $json.reason }}\nref_token: {{ $json.ref_token }}\nЧерновик: {{ $json.draft_reply }}",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double"
+          }
+        },
+        "options": {}
+      },
+      "id": "f428c2cd-a9d8-49e6-ae39-29be380ece10",
+      "name": "Telegram: уведомить админа (новая эскалация)1",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        6624,
+        992
+      ],
+      "webhookId": "22db21aa-0099-416e-a408-8058f114c03f",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_2",
+          "mode": "list",
+          "cachedResultName": "Basilik DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 689981553,
+          "mode": "list",
+          "cachedResultName": "critic log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit#gid=689981553"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "=={{ $now.toISO() }}",
+            "chat_id": "=={{ $json.chat_id }}",
+            "ref_token": "=={{ $json.ref_token }}",
+            "channel": "=={{ $json.channel }}",
+            "decision": "=={{ $json.critic_decision }}",
+            "score": "=={{ $json.critic_score }}",
+            "reasoning": "=={{ $json.critic_reasoning }}",
+            "recommendation": "=={{ $json.critic_recommendation }}",
+            "iteration": "=={{ $json.critic_iteration }}",
+            "needs_human": "=={{ $json.needs_human }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ref_token",
+              "displayName": "ref_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "decision",
+              "displayName": "decision",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reasoning",
+              "displayName": "reasoning",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "recommendation",
+              "displayName": "recommendation",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "iteration",
+              "displayName": "iteration",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "needs_human",
+              "displayName": "needs_human",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        5856,
+        1280
+      ],
+      "id": "e5c533f4-1487-494f-9bb1-36c8ba55b84f",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e4cf51fe-13dd-4bd2-abbb-fccc389c3b5e",
+              "name": "iteration",
+              "value": "=={{ $if($('Set: увеличить итерацию Critic').isExecuted, $('Set: увеличить итерацию Critic').item.json.iteration, 1) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        4528,
+        1360
+      ],
+      "id": "ded586ed-f0b1-4b33-97a4-605f30fafa34",
+      "name": "Set: iteration (safe read)."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "385f979b-94b6-4c74-92a6-5df5e43b9e03",
+              "name": "router_needs_escalation",
+              "value": "=={{ $('AI Agent: Router Agent').item.json.output.needs_escalation }}",
+              "type": "string"
+            },
+            {
+              "id": "eaa1c60f-8d7a-47c5-a868-a6dec5648a91",
+              "name": "router_draft_reply",
+              "value": "=={{ $('AI Agent: Router Agent').item.json.output.draft_reply }}",
+              "type": "string"
+            },
+            {
+              "id": "36a361c2-d209-491b-8eae-b069ae3b004b",
+              "name": "router_escalation_reasons",
+              "value": "=={{ $('AI Agent: Router Agent').item.json.output.escalation_reasons }}",
+              "type": "string"
+            },
+            {
+              "id": "3627f2f9-ad90-499e-ab38-3a62d4c5e133",
+              "name": "pii_ref_token",
+              "value": "=={{ $('Code: PII Detect (regex)').item.json.ref_token }}",
+              "type": "string"
+            },
+            {
+              "id": "11ebf87b-dea5-459e-8b9f-1ac8e5e23e15",
+              "name": "pii_chat_id",
+              "value": "=={{ $('Code: PII Detect (regex)').item.json.chat_id }}",
+              "type": "string"
+            },
+            {
+              "id": "215ed045-fc9e-4b8b-96a5-5a947c9a1b04",
+              "name": "pii_channel",
+              "value": "=={{ $('Code: PII Detect (regex)').item.json.channel }}",
+              "type": "string"
+            },
+            {
+              "id": "5ceace2c-ddae-42ec-bf33-f3b4accce651",
+              "name": "pii_sanitized_text",
+              "value": "=={{ $('Code: PII Detect (regex)').item.json.sanitized_text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        5168,
+        1280
+      ],
+      "id": "938f31fb-e356-46ba-a424-e7c0b29e636e",
+      "name": "Set: router+pii fields (safe read)"
+    },
+    {
+      "parameters": {
+        "operation": "sendAudio",
+        "chatId": "={{ $('Code: вычислить needs_human').first().json.chat_id }}",
+        "binaryData": true,
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        7456,
+        1680
+      ],
+      "id": "63a20e4c-07c7-4aea-9840-407745ebe38c",
+      "name": "Send an audio file",
+      "webhookId": "980bc2b2-81c1-401d-85db-5128fde85ca1",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $json;\nconst pii = $('Code: PII Detect (regex)').first().json;\n\nconst clean = v => (typeof v === 'string' && v.startsWith('=')) ? v.slice(1) : v;\n\nconst cleaned = {};\nfor (const key in item) cleaned[key] = clean(item[key]);\n\nlet text = cleaned.router_draft_reply || '';\nif (pii.detected_name) text = text.split('[NAME]').join(pii.detected_name);\nif (pii.detected_phone) text = text.split('[PHONE]').join(pii.detected_phone);\n\nreturn [{ json: { ...cleaned, router_draft_reply: text } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5376,
+        1280
+      ],
+      "id": "815e067d-f614-4412-b5ba-30abf1b05dd1",
+      "name": "Code: восстановить PII (detokenize)"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_2",
+          "mode": "list",
+          "cachedResultName": "Basilik DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2121603711,
+          "mode": "list",
+          "cachedResultName": "pii_registry",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit#gid=2121603711"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "chat_id": "={{ $json.chat_id }}",
+            "full_name": "={{ $json.detected_name || '' }}",
+            "ref_token": "={{ $json.ref_token }}",
+            "updated_at": "={{ $now.toISO() }}",
+            "created_at": "={{ $now.toISO() }}",
+            "data_category": "guest_contact",
+            "phone": "={{ $json.detected_phone || '' }}"
+          },
+          "matchingColumns": [
+            "chat_id"
+          ],
+          "schema": [
+            {
+              "id": "ref_token",
+              "displayName": "ref_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "full_name",
+              "displayName": "full_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "data_category",
+              "displayName": "data_category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        496,
+        1008
+      ],
+      "id": "7c557e8e-cc7e-4ad0-9573-ba03849155ec",
+      "name": "pii_registry",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "db72e7c1-33f0-429e-854d-84ebe46992e2",
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        6816,
+        1008
+      ],
+      "id": "4f9ab4c6-082b-4dea-a557-b672b5c19cb3",
+      "name": "If: одобрено?"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Code: вычислить needs_human').first().json.chat_id }}",
+        "text": "={{ $('Code: вычислить needs_human').first().json.final_reply_text }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        7104,
+        960
+      ],
+      "id": "1a286b3d-260f-4532-884b-d449c1c863fc",
+      "name": "Telegram: отправить draft_reply гостю",
+      "webhookId": "fc9d9581-cf5c-4553-b894-9f8e9b214115",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "speech",
+        "voice": {
+          "__rl": true,
+          "value": "hpp4J3VqNfWAUOO0d1Us",
+          "mode": "list",
+          "cachedResultName": "Bella - Professional, Bright, Warm"
+        },
+        "text": "={{ $('Code: вычислить needs_human').first().json.final_reply_text }}",
+        "additionalOptions": {},
+        "requestOptions": {}
+      },
+      "id": "fd9f1794-234f-490e-9a59-34bb0f9a8113",
+      "name": "TTS: озвучить ответ (ElevenLabs)1",
+      "type": "@elevenlabs/n8n-nodes-elevenlabs.elevenLabs",
+      "typeVersion": 1,
+      "position": [
+        6880,
+        1616
+      ],
+      "credentials": {
+        "elevenLabsApi": {
+          "name": "ElevenLabs account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_2",
+          "mode": "list",
+          "cachedResultName": "Basilik DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1041028922,
+          "mode": "list",
+          "cachedResultName": "conversations_log,",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit#gid=1041028922"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "conversation_log_id": "={{ $('Code: вычислить needs_human').item.json.conversation_log_id }}",
+            "timestamp": "={{ $now }}",
+            "chat_id": "={{ $('Code: вычислить needs_human').item.json.chat_id }}",
+            "ref_token": "={{ $('Code: вычислить needs_human').item.json.ref_token }}",
+            "guest_message_sanitized": "={{ $('Code: вычислить needs_human').item.json.guest_message_sanitized }}",
+            "final_reply_text": "={{ $('Code: вычислить needs_human').item.json.final_reply_text }}",
+            "channel": "={{ $('Code: вычислить needs_human').item.json.channel }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "conversation_log_id",
+              "displayName": "conversation_log_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ref_token",
+              "displayName": "ref_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "guest_message_sanitized",
+              "displayName": "guest_message_sanitized",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "final_reply_text",
+              "displayName": "final_reply_text",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "channel",
+              "displayName": "channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "escalation_id",
+              "displayName": "escalation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        7648,
+        2176
+      ],
+      "id": "9dc374b6-4511-4169-9b12-42885de9e718",
+      "name": "conversation_log",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Triggers the reminder workflow for a confirmed booking (fire-and-forget, 2 hours before visit). Call after create_booking succeeds.",
+        "method": "POST",
+        "url": "https://your-n8n-instance.example.com/webhook/basilik-reminder-trigger",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ booking_id: $fromAI('booking_id', 'ID созданной брони', 'string') }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        528,
+        2016
+      ],
+      "id": "bae679d8-ae88-4453-be62-789ba0322e6a",
+      "name": "workflow 2 trigger"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "Пожалуйста, используйте кнопки выше, чтобы подтвердить или отменить бронь.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -224,
+        896
+      ],
+      "id": "a0c04ebd-8b8f-46e5-b372-422abbb4685a",
+      "name": "Send a text message",
+      "webhookId": "2ba28822-0b47-4200-84d6-54bf3130b1be",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Приём сообщения из Telegram (голос или текст) — расшифровка голоса через ElevenLabs, обе ветки нормализуются в единый формат. Далее проверка: есть ли у этого чата активная бронь с reminder_sent=true. Если да и ответ пришёл текстом (не кликом по кнопке) — бот не распознаёт намерение, а просит воспользоваться кнопками «Подтверждаю»/«Отменяю» из напоминания. Если нет — сообщение уходит дальше в основной пайплайн (PII → Router → воркеры).",
+        "height": 960,
+        "width": 2096
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2128,
+        608
+      ],
+      "typeVersion": 1,
+      "id": "3ddb74c0-c67f-4c97-8ec4-6f9e05a0a9af",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "Детект PII в сообщении гостя (regex: имя, телефон) → нода «Проверка обезличивания» → запись/апдейт в pii_registry (chat_id, имя, телефон, ref_token). Дальше по системе идёт только sanitized_text + ref_token — реальные персональные данные к LLM-провайдеру не уходят.",
+        "height": 480,
+        "width": 640,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        0,
+        672
+      ],
+      "typeVersion": 1,
+      "id": "519474e3-78cd-40f8-8964-efbfc46486dd",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "AI Agent: Router Agent (supervisor, OpenRouter + Groq fallback, Simple Memory по chat_id) — читает sanitized_text, при необходимости вызывает НЕСКОЛЬКО tools параллельно на одно составное сообщение гостя. 4 воркера-инструмента:",
+        "height": 448,
+        "width": 2416,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -48,
+        1168
+      ],
+      "typeVersion": 1,
+      "id": "4a8a9ce4-800f-49f4-b048-1c2be288efba",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "booking_worker — создаёт новую бронь напрямую (create_booking, без проверки доступности — check_availability убран из архитектуры). Группа ≥8 чел → отдельный tool создаёт Stripe-ссылку на депозит (15€/чел). После успешного создания брони — fire-and-forget вызов Workflow 2 (Reminder-Send) через webhook (workflow 2 trigger).",
+        "height": 1424,
+        "width": 944
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -112,
+        1616
+      ],
+      "typeVersion": 1,
+      "id": "5c8da211-221b-4df0-8496-bb4689d0a19c",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "menu_allergen_recommendation_worker — RAG по Qdrant (basilik_menu + разделы «Бизнес-ланч»/«Детское меню» из basilik_policy), ReAct-логика для неоднозначных случаев (стейк/соус). Детерминированный Validator сверяет заявленные аллергены с payload коллекции дословно до отправки ответа. Не разделён на Menu/Allergen отдельно — Validator должен видеть каждый ответ по блюду, а не только те, что распознаны как «про аллерген».",
+        "height": 864,
+        "width": 864,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        832,
+        1616
+      ],
+      "typeVersion": 1,
+      "id": "12d9d466-de16-4790-bf70-75ea0b59f10b",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "cancellation_reschedule_worker — find_booking по ref_token (1 уточнение при неоднозначности, иначе эскалация). Отмена → вызывает общий сабворкфлоу apply_cancellation. Перенос → та же логика на старый слот + создание новой брони на новый слот напрямую (без check_availability). Банкет 15+ чел → эскалация.",
+        "height": 848,
+        "width": 656,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1712,
+        1616
+      ],
+      "typeVersion": 1,
+      "id": "ba0e7bb8-c2e9-47d9-9c86-80e1c6b419e7",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "faq_worker — общие вопросы не про еду и не про бронь: оплата, свой алкоголь (corkage), дресс-код, питомцы, часы работы/адрес/парковка. RAG по Qdrant, коллекция basilik_policy. Без Allergen Validator — низкая цена ошибки, деньги/здоровье не затрагиваются. Не находит ответ → некритичная эскалация.",
+        "height": 864,
+        "width": 720,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2368,
+        1616
+      ],
+      "typeVersion": 1,
+      "id": "8ff5a65b-0239-44b5-a7d1-5efd751c6259",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "Проверка на утечку PII в ответе (Code: PII-leak check compact) → If: утечка? true — сразу на needs_human, минуя Critic. False → AI Agent: Critic Agent (OpenRouter + Groq fallback) проверяет черновик Router'а на полноту/связность/тон/язык — НЕ аллергены, это отдельно у Validator'а внутри Menu Worker. Парсинг ответа (Code: parse Critic output) → Set: iteration → If: Critic passed? (passed === true ИЛИ итерация ≥2 — лимит 2 попытки). False → Set: увеличить итерацию → назад на Router Agent (цикл). True → дальше на Set: router+pii fields (safe read), к needs_human-развилке.",
+        "height": 1952,
+        "width": 2016
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3088,
+        704
+      ],
+      "typeVersion": 1,
+      "id": "2c6fad1e-0302-4fff-a5cb-3a0e7397c523",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "content": "Set: router+pii fields (safe read) — канонический «чистый» источник данных для всей нижней части цепочки. Code: восстановить PII (detokenize) — возвращает реальное имя/телефон из pii_registry для финального текста гостю. Code: вычислить needs_human — решающее правило: есть тег [ESCALATE:reason] ИЛИ в тексте упоминание движения денег. Append row in sheet — запись в critic_log. Дальше If: needs_human? — развилка на автоотправку или эскалацию.",
+        "height": 912,
+        "width": 1216,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        5120,
+        784
+      ],
+      "typeVersion": 1,
+      "id": "0371aa86-4dd0-4621-9f39-69133d615203",
+      "name": "Sticky Note8"
+    },
+    {
+      "parameters": {
+        "content": "Ветка true (needs_human) — запись в escalations (Append row in sheet1) → Telegram: уведомить админа (нативный n8n Send and Wait for Response, Approval — кнопки Approve/Decline, приостанавливает и возобновляет эту же execution, не создаёт новую) → If: одобрено? → true: Telegram отправляет draft_reply гостю; false: пока ничего не происходит (сценарий Decline не реализован).",
+        "height": 672,
+        "width": 1200,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        6352,
+        752
+      ],
+      "typeVersion": 1,
+      "id": "d3438ec0-83a1-4a56-9e7e-8676304b630b",
+      "name": "Sticky Note9"
+    },
+    {
+      "parameters": {
+        "content": "Ветка false (needs_human = нет) — автоотправка гостю. If: канал = voice? → true: TTS: озвучить ответ (ElevenLabs) → Send an audio file; false: Telegram: отправить текст гостю. Обе подветки сходятся в двух параллельных записях логов: Google Sheets: append operation_log и conversation_log.",
+        "height": 848,
+        "width": 1728,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        6400,
+        1552
+      ],
+      "typeVersion": 1,
+      "id": "4bf2a23e-72d6-45a3-83db-c1edcf2c7b77",
+      "name": "Sticky Note10"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_2",
+          "mode": "list",
+          "cachedResultName": "Basilik DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1941558071,
+          "mode": "list",
+          "cachedResultName": "escalations",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit#gid=1941558071"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "escalation_id": "={{ $now.toMillis() }}",
+            "created_at": "={{ $now }}",
+            "reason": "={{ $('Code: вычислить needs_human').first().json.escalation_reasons.join(', ') }}",
+            "ref_token": "={{ $('Code: вычислить needs_human').first().json.ref_token }}",
+            "guest_message_sanitized": "={{ $('Code: вычислить needs_human').first().json.guest_message_sanitized }}",
+            "draft_reply": "={{ $('Code: вычислить needs_human').first().json.final_reply_text }}",
+            "status": "pending"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "escalation_id",
+              "displayName": "escalation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reason",
+              "displayName": "reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "agent_source",
+              "displayName": "agent_source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "booking_id",
+              "displayName": "booking_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ref_token",
+              "displayName": "ref_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "guest_message_sanitized",
+              "displayName": "guest_message_sanitized",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "draft_reply",
+              "displayName": "draft_reply",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "money_involved",
+              "displayName": "money_involved",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "amount_eur",
+              "displayName": "amount_eur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resolved_by",
+              "displayName": "resolved_by",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resolved_at",
+              "displayName": "resolved_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resolution_note",
+              "displayName": "resolution_note",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        6368,
+        976
+      ],
+      "id": "969fe930-80d9-491d-80cf-adb392724c82",
+      "name": "escalation_log",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3040,
+        1872
+      ],
+      "typeVersion": 1,
+      "id": "f75af7bd-034f-49e4-81bd-30252cb2ec08",
+      "name": "Sticky Note11"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        4400,
+        1184
+      ],
+      "typeVersion": 1,
+      "id": "3957ed10-c54d-4495-961b-20a2b1bde3fe",
+      "name": "Sticky Note12"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        4400,
+        1184
+      ],
+      "typeVersion": 1,
+      "id": "6b08d7ca-a855-4772-bd17-7c26100db81c",
+      "name": "Sticky Note13"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3040,
+        1872
+      ],
+      "typeVersion": 1,
+      "id": "44164e2c-a4da-43c4-a9cc-b4aa79661f70",
+      "name": "Sticky Note14"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3040,
+        1872
+      ],
+      "typeVersion": 1,
+      "id": "20204485-b0cf-4004-8829-69b38b6d488d",
+      "name": "Sticky Note15"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3040,
+        1872
+      ],
+      "typeVersion": 1,
+      "id": "12850a17-c133-4f2f-b960-c121a61f573a",
+      "name": "Sticky Note16"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3040,
+        1872
+      ],
+      "typeVersion": 1,
+      "id": "e7c5229e-fe8e-4f4d-865f-48ccfed08a43",
+      "name": "Sticky Note17"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3040,
+        1872
+      ],
+      "typeVersion": 1,
+      "id": "e3fbad81-ca54-42d4-9183-3204a55f2a9b",
+      "name": "Sticky Note18"
+    },
+    {
+      "parameters": {
+        "content": "Workflow 1 — Basilik AI-ассистент (основной диалог)\n\nМультиагентная система для ресторана Базилик: Telegram-бот принимает голос и текст, обезличивает персональные данные, а Router Agent распределяет запрос гостя между 4 воркерами — бронирование, меню/аллергены, отмена/перенос, общие вопросы. Ответ проверяется Critic Agent'ом и, если задета оплата или отмена, уходит на подтверждение администратору перед отправкой гостю; иначе отправляется автоматически (текстом или голосом). Использует два вспомогательных сабворкфлоу — Workflow 2 (Reminder-Send) и apply_cancellation.",
+        "height": 384,
+        "width": 1216,
+        "color": "#96D35F"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2160,
+        160
+      ],
+      "typeVersion": 1,
+      "id": "aac45aa0-28e7-4674-a2b1-f694188326d1",
+      "name": "Sticky Note19"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Send Chat Action",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Voice or Text?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Voice or Text?": {
+      "main": [
+        [
+          {
+            "node": "Get Voice File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Normalize Text Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Voice File": {
+      "main": [
+        [
+          {
+            "node": "STT: Speech Recognition (ElevenLabs)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Voice Input": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Text Input": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: активная бронь с reminder_sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: активная бронь с reminder_sent": {
+      "main": [
+        [
+          {
+            "node": "Это ответ на напоминание?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Это ответ на напоминание?": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: PII Detect (regex)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: PII Detect (regex)": {
+      "main": [
+        [
+          {
+            "node": "Проверка обезличивания",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model (fallback)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent: Router Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "AI Agent: Router Agent": {
+      "main": [
+        [
+          {
+            "node": "Code: PII-leak check (compact)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool: create_booking": {
+      "ai_tool": [
+        [
+          {
+            "node": "booking_worker",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool: create_stripe_payment_link": {
+      "ai_tool": [
+        [
+          {
+            "node": "booking_worker",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser (Booking Worker)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "booking_worker",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool: find_booking": {
+      "ai_tool": [
+        [
+          {
+            "node": "cancellation_reschedule_worker",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tool: apply_cancellation": {
+      "ai_tool": [
+        [
+          {
+            "node": "cancellation_reschedule_worker",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser (Cancellation Worker)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "cancellation_reschedule_worker",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser (FAQ Worker)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "faq_worker",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent: Critic Agent": {
+      "main": [
+        [
+          {
+            "node": "Code: parse Critic output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Critic passed?": {
+      "main": [
+        [
+          {
+            "node": "Set: router+pii fields (safe read)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set: увеличить итерацию Critic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: утечка PII?": {
+      "main": [
+        [
+          {
+            "node": "Set: router+pii fields (safe read)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent: Critic Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "STT: Speech Recognition (ElevenLabs)": {
+      "main": [
+        [
+          {
+            "node": "Normalize Voice Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent: Router Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Проверка обезличивания": {
+      "main": [
+        [
+          {
+            "node": "pii_registry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "booking_worker",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "booking_worker",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent: Router Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent: Router Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "booking_worker": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent: Router Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "cancellation_reschedule_worker": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent: Router Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "faq_worker": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent: Router Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "menu_allergen_recommendation_worker": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent: Router Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "menu_allergen_recommendation_worker",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "menu_allergen_recommendation_worker",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "menu_allergen_recommendation_worker",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_menu": {
+      "ai_tool": [
+        [
+          {
+            "node": "menu_allergen_recommendation_worker",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_policy_menu_sections": {
+      "ai_tool": [
+        [
+          {
+            "node": "menu_allergen_recommendation_worker",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI2": {
+      "ai_embedding": [
+        [
+          {
+            "node": "search_policy_menu_sections",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "validate_allergens",
+            "type": "ai_embedding",
+            "index": 0
+          },
+          {
+            "node": "search_menu",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "validate_allergens": {
+      "ai_tool": [
+        [
+          {
+            "node": "menu_allergen_recommendation_worker",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "cancellation_reschedule_worker",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "cancellation_reschedule_worker",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "faq_worker",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "faq_worker",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "search_policy_faq",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_policy_faq": {
+      "ai_tool": [
+        [
+          {
+            "node": "faq_worker",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent: Critic Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: PII-leak check (compact)": {
+      "main": [
+        [
+          {
+            "node": "If: утечка PII?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent: Critic Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Code: parse Critic output": {
+      "main": [
+        [
+          {
+            "node": "Set: iteration (safe read).",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: увеличить итерацию Critic": {
+      "main": [
+        [
+          {
+            "node": "AI Agent: Router Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: needs_human?1": {
+      "main": [
+        [
+          {
+            "node": "escalation_log",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If: канал = voice? (основной)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: канал = voice? (основной)1": {
+      "main": [
+        [
+          {
+            "node": "TTS: озвучить ответ (ElevenLabs)1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram: отправить текст гостю1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: отправить текст гостю1": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: append operation_log (auto_sent)1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "conversation_log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: append operation_log (auto_sent)1": {
+      "main": [
+        []
+      ]
+    },
+    "Telegram: уведомить админа (новая эскалация)1": {
+      "main": [
+        [
+          {
+            "node": "If: одобрено?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: вычислить needs_human": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: iteration (safe read).": {
+      "main": [
+        [
+          {
+            "node": "If: Critic passed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: router+pii fields (safe read)": {
+      "main": [
+        [
+          {
+            "node": "Code: восстановить PII (detokenize)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "If: needs_human?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: восстановить PII (detokenize)": {
+      "main": [
+        [
+          {
+            "node": "Code: вычислить needs_human",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "pii_registry": {
+      "main": [
+        [
+          {
+            "node": "AI Agent: Router Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: одобрено?": {
+      "main": [
+        [
+          {
+            "node": "Telegram: отправить draft_reply гостю",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TTS: озвучить ответ (ElevenLabs)1": {
+      "main": [
+        [
+          {
+            "node": "Send an audio file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send an audio file": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: append operation_log (auto_sent)1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "conversation_log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "workflow 2 trigger": {
+      "ai_tool": [
+        [
+          {
+            "node": "booking_worker",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "escalation_log": {
+      "main": [
+        [
+          {
+            "node": "Telegram: уведомить админа (новая эскалация)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

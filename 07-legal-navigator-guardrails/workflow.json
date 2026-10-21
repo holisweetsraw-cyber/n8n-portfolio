@@ -1,0 +1,1927 @@
+{
+  "name": "Project 9 Legal Navigator — Guardrails Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Ветка А — «Знаю, просто вопрос»\nconfidence=high, requires_action=false.\nАгент отвечает сотруднику напрямую в Telegram.",
+        "height": 276,
+        "width": 1456,
+        "color": 3
+      },
+      "id": "9c0cd0d2-6a94-482c-a58c-f30cd948c87b",
+      "name": "Sticky - Branch A",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        384,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "e09b094c-40d8-48a7-9e09-06bc5cf0ebf6",
+      "name": "Employee Message",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -224,
+        768
+      ],
+      "webhookId": "e3a7e170-76e3-4eb9-90ba-cb52a9ff53cd",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "question",
+              "type": "string",
+              "value": "={{ $json.message.text }}"
+            },
+            {
+              "id": "2",
+              "name": "chatId",
+              "type": "string",
+              "value": "={{ $json.message.chat.id }}"
+            },
+            {
+              "id": "3",
+              "name": "employeeName",
+              "type": "string",
+              "value": "={{ $json.message.from.first_name }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "67b8cb1f-4ab9-44b2-92f5-bbc4446a4d48",
+      "name": "Normalize Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"confidence\": { \"type\": \"string\", \"enum\": [\"high\", \"low\"] },\n    \"answer\": { \"type\": \"string\" },\n    \"requires_action\": { \"type\": \"boolean\" },\n    \"source_summary\": { \"type\": \"string\" },\n    \"reason_no_answer\": { \"type\": \"string\" }\n  },\n  \"required\": [\"confidence\", \"answer\", \"requires_action\", \"source_summary\", \"reason_no_answer\"],\n  \"additionalProperties\": false\n}\n"
+      },
+      "id": "cf0e390d-046b-4884-be94-dfbcbf3533a0",
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        560,
+        1024
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.question }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Ты — Юридический навигатор, внутренний ассистент компании Globex Solutions GmbH.\n\nОтвечай СТРОГО на основе фрагментов, найденных через инструмент search_legal_guide\n(поиск по юридическому руководству, коллекция Qdrant \"legal\"). Никогда не отвечай\nиз общих знаний модели, даже если тема кажется тебе знакомой.\n\nПравила:\n1. Перед формированием ответа ВСЕГДА вызывай инструмент search_legal_guide — без\n   исключений, даже если вопрос кажется простым.\n2. Используй только то, что прямо подтверждено найденными чанками. Не добавляй\n   деталей от себя, не обобщай и не экстраполируй.\n3. Если контекст НЕ содержит прямого основания для ответа — не угадывай.\n   Явно признай недостаток информации через confidence=\"low\" и reason_no_answer.\n4. Осторожно с похожими, но разными порогами в документе — они относятся к разным\n   вопросам и НЕ взаимозаменяемы:\n   - EUR 10 000 (п. 4.1) — порог, при котором ОБЯЗАТЕЛЬНО согласование договора\n     с юридическим отделом (нужен ли юридический review вообще).\n   - EUR 5 000 (п. 5.2, Матрица полномочий на подписание) — порог, до которого\n     руководитель подразделения может ПОДПИСАТЬ договор БЕЗ визы юридического\n     отдела. Выше этой суммы виза обязательна даже для типовых договоров.\n   Если вопрос про \"подписать без визы\" — ищи п. 5.2, а не п. 4.1. Если вопрос про\n   \"когда нужно согласование с юр. отделом\" — ищи п. 4.1. Это разные пороги на\n   разные вопросы, не смешивай их.\n5. requires_action = true ТОЛЬКО если сотрудник просит выполнить действие с\n   реальными последствиями (например, подготовить и отправить письмо на\n   согласование). Обычный вопрос о правилах — requires_action = false.\n6. confidence = \"high\" только если найденный чанк даёт прямой, недвусмысленный\n   ответ. confidence = \"low\", если чанков нет, они не по теме, или дают только\n   косвенный/похожий (topic-match), но не отвечающий по существу результат —\n   например, найден чанк про NDA вообще, а вопрос был про NDA по законам\n   конкретного штата США, которого в документе нет. Наличие тематически похожего\n   чанка — это не то же самое, что наличие ответа.\n7. source_summary должен указывать на конкретный пункт документа (например:\n   \"п. 5.2 Матрицы полномочий на подписание, строка 'До EUR 5 000'\"), а не общую\n   фразу вроде \"согласно руководству\" или \"в документе указано\".\n8. Ты никогда не выполняешь действий самостоятельно (не отправляешь письма,\n   не подтверждаешь одобрения). Ты только возвращаешь JSON — реальные действия\n   происходят вне твоей зоны ответственности, после подтверждения человеком.\n\nВсегда возвращай ответ строго в формате JSON, соответствующем схеме, без\nдополнительного текста до или после JSON."
+        }
+      },
+      "id": "002bea2d-8213-4b62-8f7b-ea4458d4d6ea",
+      "name": "Legal Navigator Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        240,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.output.confidence }}",
+                    "rightValue": "high",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "9dba2808-6af7-4e9e-8176-cd865a3ca805"
+                  },
+                  {
+                    "leftValue": "={{ $json.output.requires_action }}",
+                    "rightValue": false,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equals"
+                    },
+                    "id": "af7dc001-c80e-43c7-ac28-3c212ccf8022"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Ветка А"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.output.confidence }}",
+                    "rightValue": "high",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "29a81dd0-0c3e-4cd4-a5ce-07ea06271e87"
+                  },
+                  {
+                    "leftValue": "={{ $json.output.requires_action }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equals"
+                    },
+                    "id": "0a2fec38-6134-4550-939c-7e3f91d6c243"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Ветка Б"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.output.confidence }}",
+                    "rightValue": "low",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "50c8cb87-d0f4-41e4-8777-854486a620b5"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Ветка В"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "0cf85335-73af-4d6d-b21d-292ecd3806a5",
+      "name": "Route by confidence/action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        784,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Normalize Input').item.json.chatId }}",
+        "text": "={{ $json.output.answer }}\n\n📄 Источник: {{ $json.output.source_summary }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "8a029fed-9760-4538-b54c-0fb30770b288",
+      "name": "Send Answer (Branch A)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1184,
+        176
+      ],
+      "webhookId": "575ef1a9-9c2a-40d3-aed3-a508bf373fdd",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "emailTo",
+              "type": "string",
+              "value": "you@example.com"
+            },
+            {
+              "id": "2",
+              "name": "emailSubject",
+              "type": "string",
+              "value": "=Запрос на согласование: {{ $('Normalize Input').item.json.question }}"
+            },
+            {
+              "id": "3",
+              "name": "emailBody",
+              "type": "string",
+              "value": "=Сотрудник: {{ $('Normalize Input').item.json.employeeName }}\nЗапрос: {{ $('Normalize Input').item.json.question }}\n\nОснование: {{ $json.output.answer }}\nСсылка на документ: {{ $json.output.source_summary }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7b6aca10-f7ff-4260-99fb-6917b903b9d2",
+      "name": "Draft Approval Email",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1168,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "chatId": "={{ $('Normalize Input').item.json.chatId }}",
+        "message": "=Требуется согласование:\n\n{{ $json.emailBody }}",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double"
+          }
+        },
+        "options": {}
+      },
+      "id": "4d444669-1a97-4afb-81f8-d1efe8d24d8c",
+      "name": "Approval Request (Send & Wait)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1424,
+        560
+      ],
+      "webhookId": "ff106e26-76d1-4fa0-87c3-6e0f2f6779cf",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              },
+              "id": "749657b7-3e20-4840-949e-6c6351441bbb"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f06addbe-6b60-4fb3-9831-456158914eec",
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1632,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Draft Approval Email').item.json.emailTo }}",
+        "subject": "={{ $('Draft Approval Email').item.json.emailSubject }}",
+        "message": "={{ $('Draft Approval Email').item.json.emailBody }}",
+        "options": {}
+      },
+      "id": "94a7aaad-4821-4ab8-8881-f797c86ccc15",
+      "name": "Send Email (Gmail)",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1856,
+        544
+      ],
+      "webhookId": "a2a75690-cdbb-4b97-91f1-771073fe6d91",
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Normalize Input').item.json.chatId }}",
+        "text": "Письмо на согласование отправлено. Мы сообщим, когда будет ответ.",
+        "additionalFields": {}
+      },
+      "id": "89fd5c7d-2c09-4af9-974b-24cf0608458f",
+      "name": "Notify Employee - Sent",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2160,
+        528
+      ],
+      "webhookId": "21d92e64-9fd3-46cc-9d74-749d5c23a000",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Normalize Input').item.json.chatId }}",
+        "text": "Запрос на согласование отклонён. Письмо не отправлено.",
+        "additionalFields": {}
+      },
+      "id": "49277ec6-e3f1-4bad-976a-20a0ffdce3b0",
+      "name": "Notify Employee - Rejected",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2368,
+        592
+      ],
+      "webhookId": "c0a2f6d9-ea17-4d4c-81b6-5a640970d10d",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Normalize Input').item.json.chatId }}",
+        "text": "В базе знаний нет прямого ответа на ваш вопрос. Передаю его юридическому отделу — вернусь с ответом.",
+        "additionalFields": {}
+      },
+      "id": "35abb59a-1b55-485d-bf8a-4e33885ec6a9",
+      "name": "Notify Employee - Escalated",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1152,
+        1152
+      ],
+      "webhookId": "b212766d-ce76-487e-80d9-c4e8499acacf",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "message": "=Вопрос от сотрудника {{ $('Normalize Input').item.json.employeeName }}:\n\"{{ $('Normalize Input').item.json.question }}\"\n\nПричина эскалации: {{ $json.output.reason_no_answer }}\n\nПожалуйста, ответьте текстом.",
+        "responseType": "freeText",
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "resumeAmount": 45,
+              "resumeUnit": "minutes"
+            }
+          }
+        }
+      },
+      "id": "0274ef0b-2d71-42f6-a4da-dffef9d14877",
+      "name": "Ask Lawyer (Send & Wait)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1360,
+        1152
+      ],
+      "webhookId": "3de1c970-40b2-42f4-9662-b8bbbb5f6711",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.expertAnswer.length }}",
+              "rightValue": 1,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              },
+              "id": "aedd4c6c-0773-445e-ad81-7735e574d1ce"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b7705b88-075c-45b8-afa9-ac072d39aa32",
+      "name": "Lawyer Responded in Time?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1760,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Normalize Input').item.json.chatId }}",
+        "text": "=Ответ юридического отдела:\n {{ $json.expertAnswer }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a4cb2fb0-a71a-4ac4-b5c3-a7c9fa45dc9d",
+      "name": "Forward Answer to Employee",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2064,
+        864
+      ],
+      "webhookId": "3e20075a-55a4-4152-b3bd-f2fc5ce1d4ef",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_9",
+          "mode": "list",
+          "cachedResultName": "Escalations",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_9/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Лист1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_9/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now.toISO() }}",
+            "employee": "={{ $('Normalize Input').item.json.employeeName }}",
+            "question": "={{ $('Normalize Input').item.json.question }}",
+            "lawyer_answer": "={{ $json.expertAnswer }}",
+            "status": "={{ $json.expertAnswer && $json.expertAnswer.length > 0 ? 'answered' : 'expired' }}",
+            "request_id": "={{ $execution.id }}",
+            "kb_status": "pending"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "employee",
+              "displayName": "employee",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "question",
+              "displayName": "question",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lawyer_answer",
+              "displayName": "lawyer_answer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "request_id",
+              "displayName": "request_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "kb_status",
+              "displayName": "kb_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "c36ed6c7-98e4-4871-9b3d-569a2090ccd7",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        2128,
+        1280
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "combinedText",
+              "type": "string",
+              "value": "=Вопрос: {{ $('Normalize Input').item.json.question }}\nОтвет юриста: {{ $json.expertAnswer }}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "25bfbb9a-19c5-44dc-aebe-40f937b0ac25",
+      "name": "Combine Q+A for Qdrant (Optional)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2064,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "f7e27fab-0363-4119-9582-74fd7692f2d8",
+      "name": "Embeddings OpenAI (Update)",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1,
+      "position": [
+        3520,
+        1088
+      ],
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "legal_v2",
+          "mode": "list",
+          "cachedResultName": "legal_v2"
+        },
+        "options": {}
+      },
+      "id": "3fdd3c93-e9a8-449c-b8a4-5eee5d70ca5b",
+      "name": "Qdrant Insert - Lawyer Answer (Optional)",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1,
+      "position": [
+        3616,
+        960
+      ],
+      "credentials": {
+        "qdrantApi": {
+          "name": "Qdrant account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Normalize Input').item.json.chatId }}",
+        "text": "Юрист пока не ответил на ваш вопрос. Мы продолжаем обработку запроса, обратитесь позже или уточните у своего руководителя.",
+        "additionalFields": {}
+      },
+      "id": "336c9796-2538-41ff-81fe-f675533e6560",
+      "name": "Notify - Escalation Timeout",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1888,
+        1392
+      ],
+      "webhookId": "769a3b79-989c-4078-9203-83730378844c",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        96,
+        976
+      ],
+      "id": "d4a5fc77-a565-4c43-b8c5-c772e3df1f6d",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Ищет релевантные фрагменты корпоративного юридического руководства Globex Solutions GmbH (пороги согласования договоров, матрица полномочий на подписание, требования к внешним консультантам, претензионно-исковая работа).",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "legal_v2",
+          "mode": "list",
+          "cachedResultName": "legal_v2"
+        },
+        "topK": 5,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        256,
+        1024
+      ],
+      "id": "bfa1a5e6-899d-4d6d-8d40-f1807b724e40",
+      "name": "Qdrant Vector Store",
+      "credentials": {
+        "qdrantApi": {
+          "name": "Qdrant account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        320,
+        1216
+      ],
+      "id": "0fb8b3cc-91a3-4f8c-9207-3d70bc08e479",
+      "name": "Embeddings OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "855630e6-1ff1-4b37-85ed-ea9ebd521174",
+              "name": "escalation_source",
+              "value": "fallback_no_match",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        896,
+        1616
+      ],
+      "id": "af4699d4-0d8f-4a54-a817-a0e60a8dce4d",
+      "name": "Fallback: пометка"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fb582bc0-503a-4eb6-a9d4-4153d10f5345",
+              "name": "expertAnswer",
+              "value": "={{ $json.data?.text || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "02a65c51-658a-4214-ac68-421bd1b77e5e",
+              "name": "answeredAt",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1568,
+        1120
+      ],
+      "id": "59c87ad7-322e-487b-8438-597c29a061cb",
+      "name": "Извлечение ответа юриста"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.combinedText }}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": [
+            {
+              "message": "Ты редактор корпоративной базы знаний. Тебе дают ответ юриста на вопрос сотрудника.  Твоя задача: 1. Преврати ответ в структурированный текст в формате Markdown 2. Добавь краткий заголовок ## отражающий тему 3. Убери разговорный стиль, личные обращения ('ты', 'вы лично'), любые данные, идентифицирующие конкретного сотрудника 4. Сохрани ВСЕ юридические условия и нюансы из ответа — НЕ обобщай и не упрощай их 5. Сохрани весь смысл из оригинала 6. НЕ добавляй информацию, которой нет в ответе — ни единого факта, условия или примера, которые юрист не указал явно 7. Если ответ юриста слишком краткий, расплывчатый или не содержит конкретных условий (например, \"зависит от обстоятельств\", \"смотря какой случай\") — НЕ придумывай эти условия сам, даже если ты знаешь общие нормы права. В этом случае верни короткий текст с пометкой: \"Требуется уточнение у юриста — конкретные условия в ответе не указаны.\" 8. Если сомневаешься, стоит ли добавлять какую-то деталь — не добавляй её.  Верни только нормализованный Markdown-текст."
+            }
+          ]
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        2352,
+        1072
+      ],
+      "id": "ebd6be84-4b68-4c15-9426-139be720fdd9",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4o",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        2384,
+        1264
+      ],
+      "id": "d73f2d4d-4a70-4b51-8b19-187595a35f75",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "message": "=Вопрос сотрудника: {{ $('Normalize Input').item.json.question }}\n\nСырой ответ юриста:\n{{ $json.expertAnswer }}\n\nНормализованная версия для базы знаний:\n{{ $json.text }}\n\nДобавить в базу знаний?",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double"
+          }
+        },
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "resumeAmount": 45,
+              "resumeUnit": "minutes"
+            }
+          },
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2736,
+        1072
+      ],
+      "id": "a2a2d0eb-45d6-4fb1-9f58-b72698257bd6",
+      "name": "Approve Q&A for KB (Send & Wait)",
+      "webhookId": "258a3355-56e1-4e79-bac5-f694884dcb94",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $('Basic LLM Chain').item.json.text }}",
+        "textSplittingMode": "custom",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "source",
+                "value": "human_hitl"
+              },
+              {
+                "name": "operator_id",
+                "value": "YOUR_TELEGRAM_CHAT_ID"
+              },
+              {
+                "name": "original_question",
+                "value": "={{ $('Normalize Input').item.json.question }}"
+              },
+              {
+                "name": "created_at",
+                "value": "={{ $now.toISO() }}"
+              },
+              {
+                "name": "is_current",
+                "value": "={{ true }}"
+              },
+              {
+                "name": "confidence_type",
+                "value": "human_response"
+              },
+              {
+                "name": "valid_until",
+                "value": "={{ $now.plus({months: 6}).toISO() }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        3744,
+        1104
+      ],
+      "id": "4d3ce0dc-32f8-4292-9f99-f7e8f392f652",
+      "name": "Default Data Loader"
+    },
+    {
+      "parameters": {
+        "chunkSize": 600,
+        "chunkOverlap": 100,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        3888,
+        1248
+      ],
+      "id": "61c406aa-bb83-442a-b21f-ac3f6c7024a7",
+      "name": "Recursive Character Text Splitter"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_9",
+          "mode": "list",
+          "cachedResultName": "Escalations",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_9/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Лист1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_9/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "request_id": "={{ $execution.id }}",
+            "kb_status": "={{ $('Approved for KB?').item.json.data.approved ? 'approved' : 'rejected' }}"
+          },
+          "matchingColumns": [
+            "request_id"
+          ],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "employee",
+              "displayName": "employee",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "question",
+              "displayName": "question",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "lawyer_answer",
+              "displayName": "lawyer_answer",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "request_id",
+              "displayName": "request_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "kb_status",
+              "displayName": "kb_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4256,
+        1264
+      ],
+      "id": "20e0da30-4af5-4076-9397-f6a975bacc3a",
+      "name": "Log to Google Sheets1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "712ee463-8afd-47cc-9e2a-906185e1f3e4",
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3024,
+        1088
+      ],
+      "id": "042e0dc2-ab8a-4eb9-9f82-d834780edce0",
+      "name": "Approved for KB?"
+    },
+    {
+      "parameters": {
+        "content": "Вход + Legal Navigator Agent (ядро воркфлоу)\n\nEmployee Message (Telegram Trigger) → Normalize Input (очистка и форматирование сырого сообщения) → Legal Navigator Agent (LangChain AI Agent).\n\nАгент использует:\n— OpenRouter Chat Model — LLM\n— Qdrant Vector Store (tool, search_legal_guide) — RAG-поиск по коллекции \"legal\"\n— Structured Output Parser — принудительный JSON-формат ответа (confidence: high/low, requires_action: true/false, answer, question)\n\nРезультат уходит в Switch \"Route by confidence/action\", который распределяет запрос по 4 веткам (A / B / C / Fallback).",
+        "height": 960,
+        "width": 1248
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -480,
+        480
+      ],
+      "typeVersion": 1,
+      "id": "787eb79e-f8ab-4024-af42-22775333d391",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "Ветка Б — «Требуется действие» (confidence=high, requires_action=true)\n\nАгент не просто отвечает, а предлагает выполнить действие (например, отправить email). Черновик уходит на подтверждение ответственному через Telegram (Send & Wait). При одобрении — действие выполняется (Gmail), сотруднику приходит подтверждение (Notify Employee - Sent). При отказе — сотрудник получает уведомление об отклонении (Notify Employee - Rejected).",
+        "height": 464,
+        "width": 1696,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1024,
+        400
+      ],
+      "typeVersion": 1,
+      "id": "218c993e-aa1f-458f-9f68-8e07ec3b8584",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "Ветка В — «Эскалация юристу» (confidence=low)\n\nВопрос выходит за рамки уверенности агента. Сотруднику отправляется уведомление об эскалации (Notify Employee - Escalated), вопрос уходит юристу (Ask Lawyer, Send & Wait, лимит 45 минут).\n\nЕсли юрист успел ответить — ответ пересылается сотруднику (Forward Answer to Employee) и логируется (Log to Google Sheets).\nЕсли лимит истёк — сотрудник получает уведомление о просрочке (Notify - Escalation Timeout).",
+        "height": 960,
+        "width": 1424,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        816,
+        864
+      ],
+      "typeVersion": 1,
+      "id": "d1a07b6d-c3e4-48b3-9ec0-c8161036f064",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "Fallback — технический сбой парсинга\n\nСрабатывает, если Structured Output Parser не смог разобрать JSON-ответ агента (редкий edge-case). Нода помечает случай (Fallback: пометка) и направляет его в тот же поток эскалации юристу (Notify Employee - Escalated → Ask Lawyer), что и Ветка В — чтобы вопрос не терялся, а всегда попадал к живому человеку.",
+        "height": 560,
+        "width": 960,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        480,
+        1520
+      ],
+      "typeVersion": 1,
+      "id": "309f6178-a154-4f76-b04d-48285e78bf1b",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "HITL-обновление базы знаний (Strategy 3, lesson 174)\n\nОтвет юриста нормализуется LLM (Basic LLM Chain, строгие anti-hallucination правила — не выдумывать условия, не указанные в ответе). Нормализованный текст уходит эксперту на подтверждение (Approve Q&A for KB, Send & Wait, кнопки Approve/Decline).\n\nApproved → чанк с метаданными (source, operator_id, original_question, created_at, is_current, confidence_type, valid_until) вставляется в Qdrant \"legal\" (Qdrant Insert - Lawyer Answer).\nRejected → вставки нет, только статус логируется в Google Sheets (kb_status: approved/rejected, Log to Google Sheets1).",
+        "height": 1136,
+        "width": 2240,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2272,
+        880
+      ],
+      "typeVersion": 1,
+      "id": "7524d99a-d39f-4cd9-a27a-4a84b18ae4d4",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "formTitle": "Загрузка документа",
+        "formDescription": "Загрузите PDF для индексации в базе знаний (коллекция legal_v2)",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "File",
+              "fieldType": "file",
+              "multipleFiles": false,
+              "acceptFileTypes": ".pdf",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "af23362d-4e28-4a09-b802-12ae67122e05",
+      "name": "Загрузка документа",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        1776,
+        -352
+      ],
+      "webhookId": "401fe5e0-a45f-41e6-a30d-f9a6317cc594"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "File",
+        "options": {}
+      },
+      "id": "e164caf5-b1af-4162-aed6-4d67f693e512",
+      "name": "Извлечение текста из PDF",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        2192,
+        -352
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Ты приводишь в порядок ТОЛЬКО таблицы в тексте документа. Весь остальной текст, включая\nзаголовки, обязан остаться БЕЗ ИЗМЕНЕНИЙ — копируй его посимвольно, ничего не перефразируй\nи не пересказывай.\n\nОБЯЗАТЕЛЬНО:\n- Строки, начинающиеся с \"## \" или \"### \" — заголовки разделов. Копируй их ТОЧНО как есть,\n  символ в символ, включая сам префикс \"## \"/\"### \".\n- Любой текст, который НЕ является таблицей (обычные абзацы, уже готовые предложения) —\n  копируй ТОЧНО как есть, не меняя ни слова.\n- Таблицей считай только содержимое, где явно видна построчная структура \"параметр —\n  значение — значение\" (например строки вида \"X | Y | Z\" или список коротких пунктов\n  с одинаковой структурой данных в каждой строке).\n- Если в тексте вообще нет таблиц — верни текст полностью без изменений.\n\nКаждую строку такой таблицы преврати в отдельное законченное предложение, включив в него\nвсе значения этой строки и подписи столбцов (денормализация). Не суммаризируй, не сокращай,\nне объединяй разные строки таблицы в одно предложение.\n\nТекст документа:\n{{ $json.text }}"
+      },
+      "id": "cec174d5-8ebd-46e1-9f41-cf4d380b0a53",
+      "name": "Денормализация таблиц",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.5,
+      "position": [
+        3088,
+        -352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n // Node: \"Разбивка по частям документа\"\n// Mode: Run Once for All Items\n// Position: после \"Денормализация таблиц\" (главный поток), читает version/language\n// из \"Очистка и разметка\" по имени узла.\n//\n// Recursive Character Text Splitter с приоритетом по заголовкам разделов (Урок 162):\n// заголовки задают предпочтительные границы, но не обязательные — мелкие смежные\n// секции склеиваются (в пределах одного родительского ##), крупные режутся каскадно\n// (абзацы -> предложения). Overlap убран — конфликтовал с Chunk Size на стороне\n// Insert Documents / Recursive Character Text Splitter.\n//\n// НЕ проставляет topic — это отдельный, единственный project-specific шаг после этого\n// узла (\"Определение темы (topic)\"). Всё остальное здесь универсально под любой PDF.\n\nconst UPSTREAM_NODE_NAMES = {\n  cleanupTagging: 'Очистка и разметка',\n  formTrigger: 'Загрузка документа',\n};\n\nconst TARGET_MIN_CHARS = 400;\nconst TARGET_MAX_CHARS = 700;\n\nfunction slugify(str) {\n  return str\n    .toLowerCase()\n    .replace(/\\.[a-z0-9]+$/i, '')\n    .replace(/[^\\p{L}\\p{N}]+/gu, '_')\n    .replace(/^_+|_+$/g, '')\n    .slice(0, 80);\n}\n\nfunction extractRelatedSections(text, ownSectionNum) {\n  const found = new Set();\n  const re = /(?:п\\.?|пункт[а-я]*|раздел[а-я]*|см\\.?)\\s*(\\d+(?:\\.\\d+)*)/gi;\n  let m;\n  while ((m = re.exec(text)) !== null) {\n    const num = m[1];\n    if (num && num !== ownSectionNum) found.add(num);\n  }\n  return Array.from(found);\n}\n\nconst fullText = $input.first().json.text;\nconst version = $(UPSTREAM_NODE_NAMES.cleanupTagging).item.json.version;\nconst language = $(UPSTREAM_NODE_NAMES.cleanupTagging).item.json.language;\nconst rawTitle = $(UPSTREAM_NODE_NAMES.formTrigger).item.json['File'].filename;\nconst documentId = slugify(rawTitle);\nconst createdAt = new Date().toISOString();\n\n// --- Шаг 1: секции по заголовкам ---\nconst lines = fullText.split('\\n');\nconst rawSections = [];\nlet currentSection = 'Введение (преамбула)';\nlet currentParent = 'Введение (преамбула)';\nlet buffer = [];\n\nfunction flush() {\n  const text = buffer.join('\\n').trim();\n  if (text.length > 0) rawSections.push({ section: currentSection, parentSection: currentParent, text });\n  buffer = [];\n}\n\nfor (const line of lines) {\n  const h2 = line.match(/^##\\s+(.*)/);\n  const h3 = line.match(/^###\\s+(.*)/);\n  if (h2) {\n    flush();\n    currentSection = h2[1].trim();\n    currentParent = currentSection;\n    buffer.push(line);\n    continue;\n  }\n  if (h3) {\n    flush();\n    currentSection = h3[1].trim();\n    buffer.push(line);\n    continue;\n  }\n  buffer.push(line);\n}\nflush();\n\n// --- Шаг 2: склейка мелких смежных секций ---\nconst merged = [];\nfor (const s of rawSections) {\n  const prev = merged[merged.length - 1];\n  if (prev && prev.parentSection === s.parentSection && prev.text.length < TARGET_MIN_CHARS) {\n    prev.text = prev.text + '\\n\\n' + s.text;\n  } else {\n    merged.push({ ...s });\n  }\n}\n\n// --- Шаг 3: каскадный разрез крупных секций ---\nfunction splitOversized(text) {\n  if (text.length <= TARGET_MAX_CHARS) return [text];\n  const paras = text.split('\\n\\n');\n  const parts = [];\n  let cur = '';\n  for (const p of paras) {\n    const candidate = cur ? cur + '\\n\\n' + p : p;\n    if (candidate.length > TARGET_MAX_CHARS && cur) {\n      parts.push(cur.trim());\n      cur = p;\n    } else {\n      cur = candidate;\n    }\n  }\n  if (cur.trim().length > 0) parts.push(cur.trim());\n\n  return parts.flatMap((part) => {\n    if (part.length <= TARGET_MAX_CHARS) return [part];\n    const sentences = part.split(/(?<=[.!?])\\s+/);\n    const subParts = [];\n    let curS = '';\n    for (const s of sentences) {\n      const candidate = curS ? curS + ' ' + s : s;\n      if (candidate.length > TARGET_MAX_CHARS && curS) {\n        subParts.push(curS.trim());\n        curS = s;\n      } else {\n        curS = candidate;\n      }\n    }\n    if (curS.trim().length > 0) subParts.push(curS.trim());\n    return subParts;\n  });\n}\n\nconst finalChunks = [];\nfor (const s of merged) {\n  const parts = splitOversized(s.text);\n  for (const p of parts) finalChunks.push({ section: s.section, text: p });\n}\n\n// --- Шаг 4: сборка с метаданными (без overlap, без topic) ---\nreturn finalChunks.map((c, i) => {\n  const sectionNum = (c.section.match(/^(\\d+(?:\\.\\d+)?)/) || [])[1] || null;\n  return {\n    json: {\n      text: c.text,\n      title: rawTitle,\n      document_id: documentId,\n      version,\n      language,\n      section: c.section,\n      chunk_index: i,\n      is_current: true,\n      source_type: 'document',\n      valid_until: null,\n      related_sections: extractRelatedSections(c.text, sectionNum),\n      created_at: createdAt,\n    },\n  };\n});"
+      },
+      "id": "3f36f0d7-0720-47e2-8697-0b504499a1b6",
+      "name": "Разбивка по частям документа",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3520,
+        -352
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node: \"Определение темы (topic)\"\n// Mode: Run Once for All Items\n// Position: между \"Разбивка по частям документа\" и \"Вставка чанков (addDocuments)\".\n//\n// ⚠️ ЕДИНСТВЕННЫЙ project-specific узел во всём пайплайне. При переносе на другой\n// документ/проект правишь только TOPIC_MAP здесь — весь остальной пайплайн (очистка,\n// разметка, классификация типа, денормализация таблиц, сплиттер, вставка) остаётся\n// без изменений, потому что нигде больше не знает про конкретные номера разделов.\n//\n// Карта \"номер раздела -> тема\" — совпадает со слайдом брифа \"Источник базы знаний\":\n// Пороги согласования договоров, Матрица полномочий на подписание,\n// Требования к внешним консультантам, Претензионно-исковая работа.\n\nconst TOPIC_MAP = [\n  { prefix: '4', topic: 'Пороги согласования договоров' },\n  { prefix: '5.2', exact: true, topic: 'Матрица полномочий на подписание' },\n  { prefix: '6', topic: 'Претензионно-исковая работа' },\n  { prefix: '9', topic: 'Требования к внешним консультантам' },\n];\n\nfunction topicFor(sectionLabel) {\n  const num = (sectionLabel.match(/^(\\d+(?:\\.\\d+)?)/) || [])[1];\n  if (!num) return null;\n  for (const rule of TOPIC_MAP) {\n    const matches = rule.exact ? num === rule.prefix : (num === rule.prefix || num.startsWith(rule.prefix + '.'));\n    if (matches) return rule.topic;\n  }\n  return null;\n}\n\nreturn $input.all().map((item) => ({\n  json: {\n    ...item.json,\n    topic: topicFor(item.json.section),\n  },\n}));\n"
+      },
+      "id": "af91ae1e-ba2a-4679-b1e9-e9ee3fd96b90",
+      "name": "Определение темы (topic)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3840,
+        -352
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Node: \"Очистка и разметка\"\n// Position: между \"Извлечение текста из PDF\" и \"Денормализация таблиц\".\n// Mode: Run Once for Each Item.\n\n// --- Шаг 1: очистка колонтитулов/номеров страниц ---\nconst raw = $input.item.json.text;\nconst lines = raw.split('\\n').map((l) => l.trim());\nconst counts = {};\nfor (const line of lines) {\n  if (line.length < 8) continue;\n  counts[line] = (counts[line] || 0) + 1;\n}\nconst noisy = new Set(\n  Object.entries(counts).filter(([, count]) => count >= 3).map(([line]) => line)\n);\nconst cleaned = lines.filter((line) => {\n  if (noisy.has(line)) return false;\n  if (/^(Страница|Page)\\s*\\d+\\s*$/i.test(line)) return false;\n  if (/^\\d{1,4}$/.test(line)) return false;\n  return true;\n});\nlet text = cleaned.join('\\n').replace(/\\n{3,}/g, '\\n\\n').trim();\n\n// --- Шаг 2: version, language, вычистка оглавления, разметка заголовков ---\nconst versionMatch = text.match(/(?:Версия|Version)[:\\s]+(\\d+\\.\\d+)/i);\nconst version = versionMatch ? versionMatch[1] : 'unknown';\n\nconst cyrillicCount = (text.match(/[а-яё]/gi) || []).length;\nconst latinCount = (text.match(/[a-z]/gi) || []).length;\nconst language = cyrillicCount >= latinCount ? 'ru' : 'en';\n\nconst isTocLineSingle = (l) => /^\\d{1,2}\\.\\s+\\S.*\\s\\d{1,4}$/.test(l.trim());\nconst isTocNumberOnly = (l) => /^\\d{1,2}\\.\\s*$/.test(l.trim());\nconst isTocTitleWithPage = (l) => /^\\S.*\\s\\d{1,4}$/.test(l.trim());\n{\n  const lines0 = text.split('\\n');\n  const kept = [];\n  let i = 0;\n  while (i < lines0.length) {\n    let j = i;\n    let entryCount = 0;\n    while (j < lines0.length) {\n      const line = lines0[j];\n      const trimmed = line.trim();\n      if (trimmed === '') { j++; continue; }\n      if (isTocLineSingle(line)) { entryCount++; j++; continue; }\n      if (isTocNumberOnly(line) && j + 1 < lines0.length && isTocTitleWithPage(lines0[j + 1])) {\n        entryCount++; j += 2; continue;\n      }\n      break;\n    }\n    if (entryCount >= 4) { i = j; continue; }\n    kept.push(lines0[i]);\n    i++;\n  }\n  text = kept.join('\\n');\n}\n\nconst HEADER_MAX_LEN = 65;\nconst topPattern = /^(\\d{1,2})\\.\\s+(\\S.*)$/;\nconst subPattern = /^(\\d{1,2}\\.\\d{1,2})\\s+(\\S.*)$/;\nconst appendixTop = /^(Приложение\\s+[А-ЯA-Z])\\.\\s+(\\S.*)$/i;\nconst appendixSub = /^([А-ЯA-Z]\\.\\d{1,2})\\s+(\\S.*)$/;\n\nfunction looksLikeHeaderShape(t) {\n  if (t.length === 0 || t.length > HEADER_MAX_LEN) return false;\n  if (/[.!?,;:]$/.test(t)) return false;\n  return topPattern.test(t) || subPattern.test(t) || appendixTop.test(t) || appendixSub.test(t);\n}\n\nconst MIN_GAP_LINES = 4;\nlet lastAcceptedIdx = -Infinity;\nlet lastAcceptedTop = 0;\nconst outLines = text.split('\\n').map((line, idx) => {\n  const t = line.trim();\n  if (!looksLikeHeaderShape(t)) return line;\n  const topMatch = topPattern.exec(t);\n  const isTop = topMatch && !subPattern.test(t);\n  if (isTop) {\n    const num = parseInt(topMatch[1], 10);\n    if (num <= lastAcceptedTop || (idx - lastAcceptedIdx) < MIN_GAP_LINES) return line;\n    lastAcceptedTop = num;\n    lastAcceptedIdx = idx;\n    return '## ' + t;\n  }\n  const isSub = subPattern.test(t) || appendixSub.test(t);\n  return (isSub ? '### ' : '## ') + t;\n});\n\nconst finalText = outLines.join('\\n').replace(/\\n{3,}/g, '\\n\\n').trim();\n\nreturn { json: { text: finalText, version, language } };"
+      },
+      "id": "399bfb3b-fee1-4a29-be67-ab635a9f1354",
+      "name": "Очистка и разметка",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        -352
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "legal_v2",
+          "mode": "list",
+          "cachedResultName": "legal_v2"
+        },
+        "options": {
+          "metadataPayloadKey": "metadata"
+        }
+      },
+      "id": "1170a0a3-1d5a-48b9-8f31-3a97eabe05b0",
+      "name": "Qdrant — загрузка в базу",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.1,
+      "position": [
+        4352,
+        -320
+      ],
+      "credentials": {
+        "qdrantApi": {
+          "name": "Qdrant account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4o",
+        "options": {}
+      },
+      "id": "c1136201-736b-4e31-a6a4-6fa0561e1a0a",
+      "name": "OpenRouter Chat Model2",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        2976,
+        -192
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        4160,
+        -144
+      ],
+      "id": "f96d3e4d-80d5-4fc5-9603-0f42ccacdda3",
+      "name": "Embeddings OpenAI1",
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $json.text }}",
+        "textSplittingMode": "custom",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "title",
+                "value": "={{ $json.title }}"
+              },
+              {
+                "name": "document_id",
+                "value": "={{ $json.document_id }}"
+              },
+              {
+                "name": "=version",
+                "value": "={{ $json.version }}"
+              },
+              {
+                "name": "language",
+                "value": "={{ $json.language }}"
+              },
+              {
+                "name": "section",
+                "value": "={{ $json.section }}"
+              },
+              {
+                "name": "chunk_index",
+                "value": "={{ $json.chunk_index }}"
+              },
+              {
+                "name": "is_current",
+                "value": "={{ $json.is_current }}"
+              },
+              {
+                "name": "source_type",
+                "value": "={{ $json.source_type }}"
+              },
+              {
+                "name": "valid_until",
+                "value": "={{ $json.valid_until }}"
+              },
+              {
+                "name": "related_sections",
+                "value": "={{ $json.related_sections }}"
+              },
+              {
+                "name": "created_at",
+                "value": "={{ $json.created_at }}"
+              },
+              {
+                "name": "topic",
+                "value": "={{ $json.topic }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        4608,
+        -96
+      ],
+      "id": "af738382-02f5-4f43-87bc-98ae89b3973e",
+      "name": "Default Data Loader1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        4704,
+        48
+      ],
+      "id": "f8b0b020-a7cc-465b-ba1c-e5cc89665676",
+      "name": "Recursive Character Text Splitter1"
+    },
+    {
+      "parameters": {
+        "content": "Legal Handbook — загрузка в Qdrant\nЗагружает PDF юридического руководства → извлекает текст → чистит и размечает → денормализует таблицы (OpenRouter Chat Model) → разбивает по частям документа → определяет тему (topic) → чанкует (Recursive Character Text Splitter) → эмбеддит (OpenAI Embeddings) → загружает в коллекцию Qdrant с метаданными (Default Data Loader).",
+        "height": 816,
+        "width": 3616
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1456,
+        -512
+      ],
+      "typeVersion": 1,
+      "id": "e5da474b-ef2b-4b42-a2a9-33980c5be207",
+      "name": "Sticky Note5"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Route by confidence/action": {
+      "main": [
+        [
+          {
+            "node": "Send Answer (Branch A)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Draft Approval Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Employee - Escalated",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fallback: пометка",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Approval Email": {
+      "main": [
+        [
+          {
+            "node": "Approval Request (Send & Wait)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Request (Send & Wait)": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "Send Email (Gmail)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify Employee - Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email (Gmail)": {
+      "main": [
+        [
+          {
+            "node": "Notify Employee - Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Employee - Escalated": {
+      "main": [
+        [
+          {
+            "node": "Ask Lawyer (Send & Wait)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask Lawyer (Send & Wait)": {
+      "main": [
+        [
+          {
+            "node": "Извлечение ответа юриста",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lawyer Responded in Time?": {
+      "main": [
+        [
+          {
+            "node": "Combine Q+A for Qdrant (Optional)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Forward Answer to Employee",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify - Escalation Timeout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine Q+A for Qdrant (Optional)": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI (Update)": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Qdrant Insert - Lawyer Answer (Optional)",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "Legal Navigator Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Legal Navigator Agent": {
+      "main": [
+        [
+          {
+            "node": "Route by confidence/action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Legal Navigator Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Employee Message": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Legal Navigator Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant Vector Store": {
+      "ai_tool": [
+        [
+          {
+            "node": "Legal Navigator Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Qdrant Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fallback: пометка": {
+      "main": [
+        [
+          {
+            "node": "Notify Employee - Escalated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Извлечение ответа юриста": {
+      "main": [
+        [
+          {
+            "node": "Lawyer Responded in Time?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify - Escalation Timeout": {
+      "main": [
+        [
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Approve Q&A for KB (Send & Wait)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approve Q&A for KB (Send & Wait)": {
+      "main": [
+        [
+          {
+            "node": "Approved for KB?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Qdrant Insert - Lawyer Answer (Optional)",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant Insert - Lawyer Answer (Optional)": {
+      "main": [
+        [
+          {
+            "node": "Log to Google Sheets1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved for KB?": {
+      "main": [
+        [
+          {
+            "node": "Qdrant Insert - Lawyer Answer (Optional)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log to Google Sheets1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Загрузка документа": {
+      "main": [
+        [
+          {
+            "node": "Извлечение текста из PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Извлечение текста из PDF": {
+      "main": [
+        [
+          {
+            "node": "Очистка и разметка",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Денормализация таблиц": {
+      "main": [
+        [
+          {
+            "node": "Разбивка по частям документа",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Разбивка по частям документа": {
+      "main": [
+        [
+          {
+            "node": "Определение темы (topic)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Определение темы (topic)": {
+      "main": [
+        [
+          {
+            "node": "Qdrant — загрузка в базу",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Очистка и разметка": {
+      "main": [
+        [
+          {
+            "node": "Денормализация таблиц",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Денормализация таблиц",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI1": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Qdrant — загрузка в базу",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader1": {
+      "ai_document": [
+        [
+          {
+            "node": "Qdrant — загрузка в базу",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Character Text Splitter1": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader1",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

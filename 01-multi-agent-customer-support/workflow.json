@@ -1,0 +1,1854 @@
+{
+  "name": "Project 13 — AI-поддержка интернет-магазина (Router + Workers + Critic + HITL + Eval)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Обращение в поддержку интернет-магазина",
+        "formDescription": "Форма на сайте",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Имя",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Сообщение",
+              "fieldType": "textarea",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "33ab27b7-0a85-41e4-9761-7d51f4bf1098",
+      "name": "Форма на сайте",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -528,
+        -32
+      ],
+      "webhookId": "99a15b55-197b-49bd-99b9-1376ca0ecb9d"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f1",
+              "name": "customer_name",
+              "type": "string",
+              "value": "={{ $json['Имя'] }}"
+            },
+            {
+              "id": "f2",
+              "name": "customer_email",
+              "type": "string",
+              "value": "={{ $json['Email'] }}"
+            },
+            {
+              "id": "f3",
+              "name": "customer_message",
+              "type": "string",
+              "value": "={{ $json['Сообщение'] }}"
+            },
+            {
+              "id": "f4",
+              "name": "channel",
+              "type": "string",
+              "value": "form"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "25128693-7395-470b-b18d-ba609ed3cdae",
+      "name": "Нормализация - форма",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -192,
+        -32
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f1",
+              "name": "customer_name",
+              "type": "string",
+              "value": "={{ $json.from?.value?.[0]?.name || '' }}"
+            },
+            {
+              "id": "f2",
+              "name": "customer_email",
+              "type": "string",
+              "value": "={{ $json.from?.value?.[0]?.address || '' }}"
+            },
+            {
+              "id": "f3",
+              "name": "customer_message",
+              "type": "string",
+              "value": "={{ $json.textPlain || $json.text || '' }}"
+            },
+            {
+              "id": "f4",
+              "name": "channel",
+              "type": "string",
+              "value": "email"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "29448938-0cd9-4bcc-9f14-b85360988452",
+      "name": "Нормализация - email",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -176,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Detect PII via Regexp — ищем email/телефон прямо в тексте обращения.\n// Имя и email клиента из формы тоже считаем PII — их отдельно ловим на следующем шаге.\nconst text = $json.customer_message || '';\n\nconst emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/g;\nconst phoneRegex = /(\\+?\\d[\\d\\s\\-()]{7,}\\d)/g;\n\nconst emails = text.match(emailRegex) || [];\nconst phones = text.match(phoneRegex) || [];\n\nreturn [{\n  json: {\n    ...$json,\n    detected_pii: { emails, phones }\n  }\n}];\n"
+      },
+      "id": "6915b0d8-9c81-46f6-ac97-c73f1aac514b",
+      "name": "Detect PII via Regexp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Tokenize and replace PII — заменяем найденные email/телефон в тексте плейсхолдерами,\n// плюс отдельно токенизируем имя и email клиента (пригодится, если Router вдруг обратится к клиенту по имени).\nconst text = $json.customer_message || '';\nconst emails = ($json.detected_pii && $json.detected_pii.emails) || [];\nconst phones = ($json.detected_pii && $json.detected_pii.phones) || [];\n\nlet sanitized = text;\nconst pii_map = {};\n\nemails.forEach(function (e, i) {\n  const token = '{EMAIL_' + (i + 1) + '}';\n  pii_map[token] = e;\n  sanitized = sanitized.split(e).join(token);\n});\n\nphones.forEach(function (p, i) {\n  const token = '{PHONE_' + (i + 1) + '}';\n  pii_map[token] = p;\n  sanitized = sanitized.split(p).join(token);\n});\n\nif ($json.customer_name) {\n  pii_map['{CUSTOMER_NAME}'] = $json.customer_name;\n}\nif ($json.customer_email) {\n  pii_map['{CUSTOMER_EMAIL}'] = $json.customer_email;\n}\n\nreturn [{\n  json: {\n    ...$json,\n    sanitized_text: sanitized,\n    pii_map\n  }\n}];\n"
+      },
+      "id": "417ea375-0afb-403c-b892-e70ac051139c",
+      "name": "Tokenize and replace PII",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        368,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Проверка обезличивания — контроль перед тем, как текст уйдёт в LLM.\n// Если после токенизации в sanitized_text всё ещё остался email/телефон — останавливаем выполнение,\n// а не пропускаем PII к модели молча.\nconst emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/g;\nconst phoneRegex = /(\\+?\\d[\\d\\s\\-()]{7,}\\d)/g;\nconst text = $json.sanitized_text || '';\n\nconst leaked = (text.match(emailRegex) || []).length > 0 || (text.match(phoneRegex) || []).length > 0;\n\nif (leaked) {\n  throw new Error('PII leak detected after tokenization: ' + text);\n}\n\nreturn [{ json: $json }];\n"
+      },
+      "id": "da482bd5-eda3-4afc-a53f-766da03ae58e",
+      "name": "Проверка обезличивания",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.sanitized_text || $('Проверка обезличивания').first().json.sanitized_text }}{{ $json.output ? '\\n\\nЗамечание от Critic (предыдущая попытка):\\n' + $json.output : '' }}",
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "Ты — Router Agent (Supervisor) интернет-магазина. Твоя задача — понять категорию обращения клиента, вызвать соответствующего специализированного агента и вернуть клиенту готовый ответ. Сам данные о заказах/товарах/возврате не выдумываешь.\n\nКатегории и агенты:\n1. product_info → вызови goods_agent. Наличие, характеристики, цена товара БЕЗ привязки к оформленному заказу. Признак: НЕТ номера заказа и НЕТ фразы \"мой заказ\"/\"я уже заказал\".\n2. order_status → вызови orders_agent. Статус заказа, доставка, курьер, изменения по заказу. Признак: указан номер заказа или \"мой заказ\"/\"я уже заказал\"/\"где посылка\".\n3. return_warranty → вызови returns_warranty_agent. Возврат товара или гарантийный случай (не подошёл, сломался, брак).\n4. complaint → вызови complaint_agent. Жалоба, недовольство сервисом, повторное обращение, требование руководства.\n\nПравила приоритета (сверху вниз, первое совпадение побеждает):\n1) признаки complaint (недовольство/угроза/повтор: \"недоволен\", \"уже писал\", \"разберитесь\", \"второй/третий раз\") перекрывают всё остальное;\n2) если есть номер заказа или \"мой заказ\" — order_status, даже если упомянут конкретный товар;\n3) если просто спрашивают про товар в общем — product_info;\n4) если явно про возврат/поломку/гарантию — return_warranty.\n\nПосле классификации всегда вызывай соответствующий инструмент и передавай ему текст обращения клиента как есть. Никогда не отвечай на product_info, order_status, return_warranty или complaint от себя, без вызова инструмента.\n\nОбработка результата инструмента:\n- goods_agent вернул escalate: true (товар не найден) — ответь: \"Уточняю информацию по вашему товару, отвечу в ближайшее время.\" и добавь [ESCALATE:product_not_found].\n- orders_agent вернул escalate: true — вежливо сообщи клиенту, что вопрос передан менеджеру, и добавь [ESCALATE:<escalate_reason>].\n- returns_warranty_agent вернул escalate: true — вежливо сообщи клиенту, что вопрос передан менеджеру, и добавь [ESCALATE:<escalate_reason>].\n- complaint_agent всегда возвращает escalate: true — используй его draft_answer как базу ответа, но обязательно добавь [ESCALATE:complaint_review] в конец: жалобы всегда проходят через человека, ты не отправляешь их клиенту напрямую.\n- Если инструмент вернул escalate: false — верни клиенту его ответ как есть, без тега.\nДополнительно к правилам выше:\n\n1. Тегирование вывода. Свой финальный ответ (то, что ты выводишь после того как\nполучил черновик от специализированного агента) ВСЕГДА начинай с тега\n[AGENT:имя_агента], где имя_агента — goods_agent | orders_agent |\nreturns_warranty_agent | complaint_agent — тот, кого ты реально вызвал. Дальше\nс новой строки — сам черновик как есть (включая [ESCALATE:...], если он там\nесть). Пример: \"[AGENT:goods_agent]\nКуртка W-220 в размере M в наличии, цена 89 EUR.\"\n\n2. 2. Обработка повтора после Critic. Если во входящем сообщении есть блок «Замечание\nот Critic (предыдущая попытка):» — значит твой предыдущий ответ был отклонён, и\nсейчас ты видишь и исходное обращение клиента, и вердикт Critic по прошлой попытке.\nВ этом случае:\n- Прочитай тег в конце вердикта Critic: [DECISION:REROUTE:имя_агента] — вызови\n  этого агента вместо того, кого вызывал раньше. [DECISION:REVISE_CONTENT] —\n  вызови агента по обычной логике категорий (как в п.1), передай ему исходное\n  обращение клиента и добавь замечание: строки ОБОСНОВАНИЕ и РЕКОМЕНДАЦИЯ из\n  вердикта Critic.\n- Выведи результат с тем же тегом [AGENT:...], как в пункте 1.\n\nТон: вежливый, короткий, по делу. Без лишних извинений и воды."
+        }
+      },
+      "id": "8c3cc2b1-1567-455f-a82d-bd063f0725a6",
+      "name": "Router Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        800,
+        48
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 3000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        720,
+        240
+      ],
+      "id": "14c03ede-c294-41bf-a0c0-6cebb34c2f7c",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {},
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -528,
+        256
+      ],
+      "id": "75af4aa0-ded0-43b7-bdd8-af216c0861d5",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        880,
+        240
+      ],
+      "id": "ca6a1120-3b3d-4b26-bebc-53041e065776",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "name": "Groq account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "Ты — резервный агент интернет-магазина. Основной Router Agent временно недоступен из-за технического сбоя.\nИзвинись перед клиентом за задержку, сообщи, что обращение принято и менеджер ответит в ближайшее время. Не пытайся угадывать детали по товару, заказу или статусу — у тебя нет доступа к данным. Тон: спокойный, вежливый, короткий."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1968,
+        96
+      ],
+      "id": "d9b9ade1-d0d7-4243-a84e-c7b13d1eb540",
+      "name": "Универсальный агент (Error Fallback)."
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1856,
+        240
+      ],
+      "id": "11af9760-1889-4b3b-813e-dc677a5f436b",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        256
+      ],
+      "id": "747d95d4-de4d-4f4e-9b11-d1251a3c81c9",
+      "name": "Groq Chat Model1",
+      "credentials": {
+        "groqApi": {
+          "name": "Groq account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        592,
+        784
+      ],
+      "id": "fe5bfcac-985c-417b-9a84-52f024e6d111",
+      "name": "OpenRouter Chat Model2",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        704,
+        800
+      ],
+      "id": "cecb7a4a-ff4f-4ff0-8cad-bc6a1d4a1986",
+      "name": "Groq Chat Model2",
+      "credentials": {
+        "groqApi": {
+          "name": "Groq account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Use this tool to answer customer questions about product availability, specifications, sizes, colors, and stock. Call this tool whenever the customer's message is about a specific product (product_info category).",
+        "text": "=={{ $fromAI('customer_message', 'Customer message text about the product question', 'string') }}",
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "Ты — Agent-Товары интернет-магазина. Отвечаешь только на вопросы о наличии, характеристиках и цене товаров. Заказы, доставку, возврат и жалобы не обрабатываешь.\n\nУ тебя есть один инструмент — поиск по таблице товаров (Google Sheets, лист \"Товары_Остатки\"). Колонки таблицы: Артикул (код модели, например W-220), Название, Категория, Размер, Цвет, Цена_EUR, Остаток_шт.\n\nПравила:\n1. Извлеки из обращения клиента Артикул товара (код модели, например W-220, SN-118, BL-305, TS-050, BG-210). Инструмент ищет строго по Артикулу, а не по названию словами.\n2. Если клиент не назвал артикул явно (например написал только \"чёрная куртка\" без кода) — НЕ угадывай и не придумывай артикул. Ответь, что нужен точный артикул или модель товара, и попроси уточнить.\n3. Если артикул указан — вызови инструмент. Он вернёт все строки с этим артикулом (обычно по одной строке на каждый размер).\n4. Если клиент указал конкретный размер — найди строку с этим размером:\n   - Остаток_шт > 0 → товар в наличии в этом размере. Укажи количество (Остаток_шт) и цену (Цена_EUR).\n   - Остаток_шт = 0 → товара нет в наличии именно в этом размере (это не значит, что модели вообще нет). Сообщи это и перечисли другие размеры, где Остаток_шт > 0, если такие есть.\n5. Если размер не указан — перечисли все размеры этого артикула с Остаток_шт > 0.\n6. Если инструмент не вернул ни одной строки — такого артикула нет в каталоге. Сообщи об этом клиенту и добавь в конец ответа тег [ESCALATE:product_not_found].\n7. Никогда не придумывай цену, наличие, цвет или другие характеристики — используй только данные, которые реально вернул инструмент.\n\nТон: вежливый, короткий, по делу."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agentTool",
+      "typeVersion": 3,
+      "position": [
+        624,
+        576
+      ],
+      "id": "c61055ec-dace-4667-978c-373a772414df",
+      "name": "goods_agent"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Use this tool to look up an order's status and delivery status by order number. Call this tool whenever the customer asks about order status, shipping, or delivery.",
+        "text": "=={{ $fromAI('customer_message', 'Customer message text about order status or delivery', 'string') }}",
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "Ты — Agent-Заказы+Доставка интернет-магазина. Отвечаешь только на вопросы о статусе заказа и доставке. Товары, возврат, гарантию и жалобы не обрабатываешь.\n\nУ тебя есть один инструмент — поиск по таблице заказов (Google Sheets, лист \"Заказы_CRM\"). Колонки: Номер_заказа, Имя_клиента, Email, Артикул, Товар, Кол-во, Сумма_EUR, Дата_заказа, Статус_заказа, Статус_доставки.\n\nПравила:\n1. Извлеки из обращения клиента Номер_заказа. Инструмент ищет строго по номеру заказа.\n2. Если номер заказа не назван — НЕ угадывай. Попроси клиента уточнить номер заказа.\n3. Если номер указан — вызови инструмент.\n4. Если заказ найден — сообщи Статус_заказа, Статус_доставки, Товар и Дата_заказа своими словами, без лишних деталей из таблицы.\n5. Если заказ не найден — сообщи, что заказ с таким номером не найден, и добавь в конец ответа тег [ESCALATE:order_not_found].\n6. Если клиент требует компенсацию за задержку или срыв доставки — НЕ предлагай компенсацию сам и не отказывай в ней. Сообщи, что обращение передано человеку, и добавь тег [ESCALATE:delivery_compensation].Не предлагай компенсацию сам и не упоминай возможность компенсации, если\nклиент явно её не попросил. Если клиент просто спрашивает статус или\nместоположение заказа — сообщи статус и доставку как есть, без каких-либо\nупоминаний компенсации. Тег [ESCALATE:delivery_compensation] добавляй\nТОЛЬКО если клиент сам прямо потребовал компенсацию/возврат денег за\nзадержку — не добавляй его просто потому, что статус доставки показывает\nзадержку.\n7. Никогда не придумывай статус заказа или доставки — используй только данные из таблицы.\n\nТон: вежливый, короткий, по делу."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agentTool",
+      "typeVersion": 3,
+      "position": [
+        192,
+        576
+      ],
+      "id": "e487e2be-ad25-4a97-9029-9519ec5937b9",
+      "name": "orders_agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        48,
+        768
+      ],
+      "id": "4266bd7e-033b-40f6-8b90-6596592640a8",
+      "name": "OpenRouter Chat Model3",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        256,
+        848
+      ],
+      "id": "1fae9188-0c0b-4c53-a845-7afd8dc5c9d6",
+      "name": "Groq Chat Model3",
+      "credentials": {
+        "groqApi": {
+          "name": "Groq account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "AI Agent that can call other toolsHandles product returns and warranty/defect claims. Use ONLY when category = return_warranty. Pass the customer's message text as-is. This agent never approves a refund or replacement itself — every response requires human review before it is sent to the customer.",
+        "text": "={{ $fromAI('Prompt__User_Message_', `Customer message text about a return or warranty issue`, 'string') }}",
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "Ты — Agent-Возврат+Гарантия (returns_warranty_agent) интернет-магазина.\nОбрабатываешь запросы на возврат товара и гарантийные случаи (поломка,\nбрак, дефект).\n\nВАЖНО: ты никогда не отправляешь ответ клиенту напрямую и никогда не\nпринимаешь решение о возврате денег или замене товара сам. Регистрация\nобращения в таблице — это не решение по делу, её делаешь сам; а вот\nодобрение/отказ возврата, замена или денежная компенсация — только\nчерез человека.\n\nПорядок действий (максимум 3 вызова инструментов):\n\n1. Если в обращении есть номер заказа — вызови check_order с этим\n   номером. Если номера нет — не вызывай инструменты и не угадывай, в\n   ответе просто попроси клиента уточнить номер заказа. Это обычный\n   уточняющий вопрос, не решение по возврату/гарантии — тег эскалации\n   НЕ добавляй, такой ответ уходит клиенту сразу.\n\n2. Если check_order не нашёл заказ — сообщи, что заказ не найден, добавь\n   [ESCALATE:order_not_found]. Дальше не действуй.\n\n3. Если заказ найден — определи тип обращения:\n   - простой возврат (не подошёл размер/цвет, передумал, без жалобы на\n     дефект) — правило магазина: 14 дней с даты заказа;\n   - гарантийный случай (сломался, брак, дефект) — правило магазина:\n     12 месяцев с даты заказа, единый срок для всех товаров.\n\n4. Если это гарантийный случай — вызови check_and_log_warranty с данными\n   из check_order (номер заказа, артикул, товар, дата покупки) и кратким\n   описанием проблемы. Инструмент сам проверит, было ли уже такое\n   обращение, и либо обновит его, либо создаст новое. Для простого\n   возврата этот инструмент не вызывай.\n\n5. По результату check_and_log_warranty сообщи в черновике: если\n   обращение новое — \"зарегистрировано новое обращение <ID>\"; если\n   инструмент сработал на уже существующей записи — укажи её ID и суть\n   проблемы, отметь, что случай уже в работе.\n\n6. Составь черновик: факты из инструментов, укладывается ли обращение в\n   срок (14 дней / 12 месяцев), предложенное действие для человека\n   (одобрить возврат / одобрить гарантийный ремонт-замену / отказать с\n   обоснованием / нужна доп. информация). Не придумывай факты, которых\n   нет в результатах инструментов.\n\n7. Если клиент прямо просит вернуть деньги — начни черновик со слов\n   \"ВОЗВРАТ ДЕНЕГ:\", чтобы человек сразу видел приоритет.\n\nТег эскалации:\n- нет номера заказа → тега нет, это просто уточняющий вопрос\n- заказ не найден → [ESCALATE:order_not_found]\n- заказ найден и обработан (есть рекомендация по возврату/гарантии) →\n  [ESCALATE:review_required]\nБольше никаких тегов не добавляй — окончательное решение по возврату/\nзамене/компенсации всегда за человеком.\n\nТон: фактический, по делу, без оценочных суждений о клиенте."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agentTool",
+      "typeVersion": 3,
+      "position": [
+        1136,
+        560
+      ],
+      "id": "a862cdd8-67a0-479d-b875-5a703efc7dd6",
+      "name": "returns_warranty_agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1056,
+        736
+      ],
+      "id": "41e6c23b-b164-4c9f-90d6-63a993b5d8fb",
+      "name": "OpenRouter Chat Model4",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        832
+      ],
+      "id": "8ec321bf-8c33-468a-84a5-8b708287a84e",
+      "name": "Groq Chat Model4",
+      "credentials": {
+        "groqApi": {
+          "name": "Groq account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Look up a customer order in Заказы_CRM by order number. Confirms the purchase happened and returns purchase date, article, product, delivery status and amount.",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_1",
+          "mode": "list",
+          "cachedResultName": "Кейс 1 — Интернет-магазин — база данных (Товары, Заказы, Гарантии)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_1/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 75342275,
+          "mode": "list",
+          "cachedResultName": "Заказы_CRM_view",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_1/edit#gid=75342275"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Номер_заказа",
+              "lookupValue": "={{ $fromAI('order_number', 'Order number extracted from customer message', 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1440,
+        672
+      ],
+      "id": "9cf3faf5-8991-4215-b8bc-9ef19088a2eb",
+      "name": "check_order",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Log a new warranty/return case for this order in Гарантийные_обращения, or update the existing case if one already exists for this order number. Call this whenever the customer reports a defect or warranty issue.",
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_1",
+          "mode": "list",
+          "cachedResultName": "Кейс 1 — Интернет-магазин — база данных (Товары, Заказы, Гарантии)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_1/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 501482604,
+          "mode": "list",
+          "cachedResultName": "Гарантийные_обращения",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_1/edit#gid=501482604"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ID_обращения": "={{ $fromAI('case_id', 'Case ID in format G-<order number>, e.g. G-48213', 'string') }}",
+            "Номер_заказа": "={{ $fromAI('order_number', 'Order number', 'string') }}",
+            "Артикул": "={{ $fromAI('article', 'Product article/SKU from the order', 'string') }}",
+            "Товар": "={{ $fromAI('product_name', 'Product name from the order', 'string') }}",
+            "Дата_покупки": "={{ $fromAI('purchase_date', 'Order date in DD.MM.YYYY format', 'string') }}",
+            "Дата_обращения": "={{ $now.format('dd.MM.yyyy') }}",
+            "Дней_с_покупки": "={{ Math.floor((Date.now() - new Date($fromAI('purchase_date_iso', 'Purchase date in YYYY-MM-DD format', 'string'))) / 86400000) }}",
+            "Тип_проблемы": "={{ $fromAI('problem_type', 'Short description of the defect in Russian', 'string') }}",
+            "Гарантийный_срок_мес": "12",
+            "Статус": "Новое обращение"
+          },
+          "matchingColumns": [
+            "Номер_заказа"
+          ],
+          "schema": [
+            {
+              "id": "ID_обращения",
+              "displayName": "ID_обращения",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Номер_заказа",
+              "displayName": "Номер_заказа",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Артикул",
+              "displayName": "Артикул",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Товар",
+              "displayName": "Товар",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Дата_покупки",
+              "displayName": "Дата_покупки",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Дата_обращения",
+              "displayName": "Дата_обращения",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Дней_с_покупки",
+              "displayName": "Дней_с_покупки",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Тип_проблемы",
+              "displayName": "Тип_проблемы",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Гарантийный_срок_мес",
+              "displayName": "Гарантийный_срок_мес",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Статус",
+              "displayName": "Статус",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1360,
+        816
+      ],
+      "id": "17acd81b-8ac6-4a01-85f8-96191d99b202",
+      "name": "check_and_log_warranty",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        816
+      ],
+      "id": "64390456-5d84-483b-a26b-96d6c56488f4",
+      "name": "OpenRouter Chat Model5",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1856,
+        832
+      ],
+      "id": "12ff0ddf-5ad5-405b-a096-3f093678b3f2",
+      "name": "Groq Chat Model5",
+      "credentials": {
+        "groqApi": {
+          "name": "Groq account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Handles customer complaints and dissatisfaction. Use ONLY when category = complaint. Pass the customer's message text as-is. Drafts a response for human review — never sends a reply or offers compensation automatically.",
+        "text": "=={{ $fromAI('customer_message', 'Customer complaint message text', 'string') }}",
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "Ты — Complaint Agent (complaint_agent) интернет-магазина. Обрабатываешь\nжалобы и явное недовольство сервисом. Ты никогда не отправляешь ответ\nклиенту сам и никогда не предлагаешь компенсацию, скидку или конкретное\nрешение — это решает человек.\n\nМысль → Действие → Наблюдение:\n\nМысль: определи, ссылается ли жалоба на конкретный заказ (номер заказа\nупомянут в тексте).\n\nДействие (условно, максимум 1 вызов инструмента): если номер заказа\nесть — вызови check_order, чтобы подтянуть контекст (что заказано,\nстатус, статус доставки) для черновика. Если номера нет — пропусти этот\nшаг, работай с текстом жалобы как есть.\n\nНаблюдение: используй результат (если был) только как контекст. Не\nделай вывод о правоте клиента и не предлагай решение.\n\nСоставь черновик:\n- признание проблемы (эмпатичный, но не заискивающий тон)\n- краткое изложение сути жалобы своими словами (для человека, не для\n  отправки клиенту)\n- НЕ предлагай компенсацию, скидку, сроки решения — это за человеком\n- если из текста понятно, что это повторное обращение (упомянуто \"уже\n  писал\", \"второй/третий раз\") — отметь отдельно, приоритет выше\n  обычного\n\nВсегда добавь в самый конец ответа [ESCALATE:complaint_review] — жалобы\nвсегда уходят человеку, без исключений.\n\nТон: фактический, эмпатичный, без обещаний."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agentTool",
+      "typeVersion": 3,
+      "position": [
+        1648,
+        592
+      ],
+      "id": "d4a63808-74db-4178-a252-c60ca30fc99c",
+      "name": "complaint_agent"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Look up a customer order in Заказы_CRM by order number. Confirms the purchase happened and returns purchase date, article, product, delivery status and amount.",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_1",
+          "mode": "list",
+          "cachedResultName": "Кейс 1 — Интернет-магазин — база данных (Товары, Заказы, Гарантии)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_1/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 75342275,
+          "mode": "list",
+          "cachedResultName": "Заказы_CRM_view",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_1/edit#gid=75342275"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Номер_заказа",
+              "lookupValue": "={{ $fromAI('order_number', 'Order number extracted from customer message', 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        2048,
+        736
+      ],
+      "id": "7d76994f-b3c5-4b8a-af78-8c99e7e193e6",
+      "name": "check_order1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "86e16f18-5fd7-4932-b89d-339ce3d219ce",
+              "leftValue": "={{ $json.real_output }}",
+              "rightValue": "[ESCALATE:",
+              "operator": {
+                "type": "string",
+                "operation": "notContains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2000,
+        -288
+      ],
+      "id": "35325dad-b400-47cc-b43e-e934d1fec98e",
+      "name": "Проверка эскалации"
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "Ответ на ваше обращение — требуется проверка",
+        "message": "={{ $json.clean_output }}",
+        "options": {
+          "sendTo": "={{ $json.recipient_email }}"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2272,
+        -128
+      ],
+      "id": "d09d8810-2f98-44bd-ac8c-a17bea539e9d",
+      "name": "Создать черновик (на проверку",
+      "webhookId": "e86f94ca-c9d7-4344-b864-b18ea155be87",
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Looks up order status and delivery status by order number from the store's Заказы_CRM sheet.",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_1",
+          "mode": "list",
+          "cachedResultName": "Кейс 1 — Интернет-магазин — база данных (Товары, Заказы, Гарантии)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_1/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 75342275,
+          "mode": "list",
+          "cachedResultName": "Заказы_CRM_view",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_1/edit#gid=75342275"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Номер_заказа",
+              "lookupValue": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('values0_Value', `Номер заказа, например 48213`, 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        448,
+        800
+      ],
+      "id": "65303c08-bac5-433c-8a98-2594947ea66c",
+      "name": "check_order2",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.recipient_email }}",
+        "subject": "Re: Ваше обращение в поддержку",
+        "message": "={{ $json.clean_output }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2240,
+        -400
+      ],
+      "id": "25d648b9-f07e-4d4f-bc8f-b3557468b1cc",
+      "name": "Отправить ответ (авто)",
+      "webhookId": "80d7693c-f5ea-4c0b-afdb-4fa32e3daa47",
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Восстановление PII перед отправкой письма клиенту\nlet output = $json.output || '';\n\n// pii_map строится в Tokenize and replace PII независимо от канала (форма/email)\nconst map = $('Tokenize and replace PII').first().json.pii_map || {};\nfor (const token in map) {\n  output = output.split(token).join(map[token]);\n}\n\n// Реальный email клиента: агент его никогда не видел (был токенизирован).\n// Берём напрямую из ноды нормализации, пробуя обе ветки —\n// в конкретном запуске выполнилась только одна из них (форма или email)\nfunction getRealEmail() {\n  try { const v = $('Нормализация - форма').first().json.customer_email; if (v) return v; } catch (e) {}\n  try { const v = $('Нормализация - email').first().json.customer_email; if (v) return v; } catch (e) {}\n  return '';\n}\n\nfunction getRealName() {\n  try { const v = $('Нормализация - форма').first().json.customer_name; if (v) return v; } catch (e) {}\n  try { const v = $('Нормализация - email').first().json.customer_name; if (v) return v; } catch (e) {}\n  return '';\n}\n\n// Убираем технические теги [AGENT:...] и [ESCALATE:...] из текста, который\n// реально увидит клиент/человек — они нужны только для внутренней логики\n// workflow (Critic, Проверка эскалации), но не должны попадать в письмо.\nconst clean_output = output\n  .replace(/\\[AGENT:[^\\]]+\\]\\s*/g, '')\n  .replace(/\\[ESCALATE:[^\\]]+\\]\\s*/g, '')\n  .trim();\n\nreturn [{\n  json: {\n    ...$json,\n    real_output: output,\n    clean_output,\n    recipient_email: getRealEmail(),\n    recipient_name: getRealName()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        -288
+      ],
+      "id": "4aa3bd67-9774-46ef-9528-03134f5989e0",
+      "name": "Восстановление PII перед отправкой"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Get row(s) in sheet in Google Sheets",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_1",
+          "mode": "list",
+          "cachedResultName": "Кейс 1 — Интернет-магазин — база данных (Товары, Заказы, Гарантии)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_1/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1416601877,
+          "mode": "list",
+          "cachedResultName": "Товары_Остатки",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_1/edit#gid=1416601877"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Артикул",
+              "lookupValue": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('values0_Value', `Артикул товара, например W-220, если клиент его назвал`, 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        864,
+        800
+      ],
+      "id": "366fd4e6-6790-49b1-bd3b-041dba24cca8",
+      "name": "search_product",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Исходное обращение клиента:\nИсходное обращение клиента:\n{{ $('Проверка обезличивания').first().json.sanitized_text }}\n\nВывод Router Agent (тег агента + черновик):\n{{ $json.output }}",
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "Ты — Critic (судья) в системе поддержки интернет-магазина. Тебе не нужно\nотвечать клиенту — твоя задача: проверить, (1) того ли специализированного\nагента вызвал Router для этого обращения (Tool Selection), и (2) если\nагент выбран верно — достаточно ли хорош его черновик, чтобы использовать\nего как есть (Final Output).\n\nНа вход ты получаешь:\n- исходное обращение клиента (текст, возможно с плейсхолдером вместо\n  имени/email — это нормально, не пытайся его расшифровать)\n- вывод Router Agent, который начинается с тега [AGENT:имя_агента] —\n  goods_agent | orders_agent | returns_warranty_agent | complaint_agent,\n  дальше идёт сам черновик (может содержать тег [ESCALATE:...] в конце —\n  это штатная эскалация от самого агента, не ошибка сама по себе)\n\nШАГ 1 — Проверка маршрутизации (Tool Selection). Категории и приоритет\nмежду ними (правила Router Agent, не меняй их сам, только проверяй\nсоответствие):\n\n1. complaint — явное недовольство сервисом, повтор обращения без ответа,\n   требование связать с руководством. Приоритет выше всех остальных, даже\n   если внутри упомянут возврат/гарантия/заказ.\n2. order_status → orders_agent — упомянут номер заказа ИЛИ фразы \"мой\n   заказ\", \"уже заказал/оплатил\", \"где посылка\" — даже если также назван\n   конкретный товар.\n3. product_info → goods_agent — вопрос о товаре БЕЗ номера заказа и без\n   признаков покупки.\n4. return_warranty → returns_warranty_agent — явное намерение вернуть\n   товар или заявка о поломке/дефекте (и нет признаков complaint).\n\nОпредели: судя по обращению, тот ли агент был вызван? Если нет — укажи,\nкакой должен был быть вызван, и переходи сразу к решению REROUTE — шаг 2\nв этом случае не выполняй, оценивать текст черновика бессмысленно, он\nотвечает не на тот запрос.\n\nШАГ 2 — Оценка черновика (только если маршрутизация верна). Три критерия,\nмаксимум 5 баллов:\n\n- Решение вопроса по существу (0-3). Отвечает ли черновик именно на то,\n  что спросил клиент, используя ТОЛЬКО данные, которые агент реально мог\n  получить от своего инструмента (наличие, цена, статус заказа, срок\n  доставки, гарантийная история)? 3 — полностью и фактурно закрывает\n  вопрос, 2 — закрывает частично или есть сомнительная деталь, 1 — общими\n  словами мимо сути, 0 — явно придуманный факт (галлюцинация) или ответ\n  не по теме.\n- Вежливость тона (0-1). Профессиональный тон, без оценочных суждений о\n  клиенте, без лишних извинений/воды. 1 — ок, 0 — грубо или неестественно.\n- Дальнейшие шаги, если применимо (0-1). Если в черновике есть отказ,\n  ограничение или эскалация — понятно ли клиенту/человеку, что будет\n  дальше? Если дальнейшие шаги не нужны по сути вопроса (например простой\n  прямой ответ \"товар в наличии\") — засчитывай 1 по умолчанию, этот\n  критерий не должен штрафовать закрытые вопросы.\n\nЖЁСТКОЕ ПРАВИЛО (нарушение обнуляет ВЕСЬ ответ, ОЦЕНКА = 0, независимо от\nбаллов выше, применимо только при верной маршрутизации):\n\n- goods_agent или orders_agent упоминает деньги, возврат средств,\n  компенсацию, скидку без явной пометки об эскалации человеку — они не\n  имеют права обещать это сами (зона returns_warranty_agent/Human).\n- Черновик содержит данные, похожие на данные ДРУГОГО клиента (другое\n  имя, другой номер заказа, не относящийся к текущему обращению).\n- Черновик прямо противоречит данным, которые логично было получить из\n  инструмента (например утверждает наличие товара, хотя контекст говорит\n  обратное).\n\nРЕШЕНИЕ:\n- Маршрутизация неверна → REROUTE.\n- Маршрутизация верна И жёсткое нарушение → REVISE_CONTENT, ОЦЕНКА: 0.\n- Маршрутизация верна И жёстких нарушений нет И ОЦЕНКА >= 4 из 5 → APPROVE\n  (это верно и для штатных эскалаций агента — если черновик правильно\n  эскалирует, это APPROVE, не REVISE).\n- Маршрутизация верна И жёстких нарушений нет И ОЦЕНКА < 4 → REVISE_CONTENT.\n\nФормат ответа — строго обычный текст, ВСЕГДА ровно 4 строки в этом порядке,\nбез JSON, без markdown, без лишних пояснений до или после:\n\nОЦЕНКА: <число 0-5, или \"-\" если маршрутизация неверна>\nОБОСНОВАНИЕ: <2-4 предложения — что хорошо, что плохо, включая причину при неверной маршрутизации>\nРЕКОМЕНДАЦИЯ: <что конкретно исправить, или \"нет\" если ОЦЕНКА >= 4>\n[DECISION:APPROVE] или [DECISION:REROUTE:имя_агента] или [DECISION:REVISE_CONTENT]\n\nДля REROUTE — имя_агента внутри тега это тот, кого нужно вызвать вместо\nнеправильно выбранного (goods_agent | orders_agent | returns_warranty_agent\n| complaint_agent).\n\nПримеры:\n\nПример 1 (APPROVE):\nОбращение: «Есть куртка W-220 в размере M?»\nВывод Router: «[AGENT:goods_agent]\nКуртка W-220 в размере M в наличии, цена 89 EUR.»\nТвой ответ:\nОЦЕНКА: 5\nОБОСНОВАНИЕ: Правильный агент. Прямой ответ по существу, цифры похожи на реальный результат поиска по товару, тон нейтрально-деловой. Дальнейшие шаги не нужны — вопрос закрыт полностью.\nРЕКОМЕНДАЦИЯ: нет\n[DECISION:APPROVE]\n\nПример 2 (REROUTE — реальный баг из тестов Дня 2):\nОбращение: «Могу я поменять цвет куртки после того как оформил заказ №48213?»\nВывод Router: «[AGENT:goods_agent]\nУ куртки W-220 доступны цвета: чёрный, синий, хаки.»\nТвой ответ:\nОЦЕНКА: -\nОБОСНОВАНИЕ: В обращении указан номер заказа (№48213) и фраза про уже оформленный заказ — по правилу приоритета это order_status, а не product_info, даже раз упомянут товар.\nРЕКОМЕНДАЦИЯ: Вызови orders_agent вместо goods_agent — обращение про уже оформленный заказ №48213 (изменение цвета после покупки), не общий вопрос о товаре.\n[DECISION:REROUTE:orders_agent]\n\nПример 3 (REVISE_CONTENT — жёсткое правило):\nОбращение: «Где мой заказ 48213, я уже неделю жду?»\nВывод Router: «[AGENT:orders_agent]\nВаш заказ 48213 задерживается, приносим извинения — оформим вам скидку 10% на\nследующий заказ в качестве компенсации.»\nТвой ответ:\nОЦЕНКА: 0\nОБОСНОВАНИЕ: Агент выбран верно, но сам предложил компенсацию (скидку) без эскалации человеку — прямое нарушение правила Дня 1, обнуляет весь ответ независимо от остальных плюсов черновика.\nРЕКОМЕНДАЦИЯ: Убери предложение скидки. Сообщи фактический статус и срок доставки из данных заказа. Если клиент сам прямо потребует компенсацию — проставь [ESCALATE:delivery_compensation] и не предлагай ничего сам.\n[DECISION:REVISE_CONTENT]"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1024,
+        -272
+      ],
+      "id": "40b17dbb-9044-4956-b1ac-5afec7fd970a",
+      "name": "Critic Agent"
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-haiku-4.5",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1056,
+        -128
+      ],
+      "id": "391e9721-a995-424d-be40-1c6e07f8edac",
+      "name": "OpenRouter Chat Model6",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        -112
+      ],
+      "id": "f08b0643-e723-4fe7-a40b-90b26c380793",
+      "name": "Groq Chat Model6",
+      "credentials": {
+        "groqApi": {
+          "name": "Groq account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "3cdb57a2-8db5-41fb-8d8f-151b96acbb9d",
+              "leftValue": "={{ $json.output.includes('[DECISION:APPROVE]') || $runIndex >= 2 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1344,
+        -192
+      ],
+      "id": "bc51f19a-cedc-4d67-a1c9-e5f56040c5ae",
+      "name": "Проверка Critic."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b3c1bed1-6acb-4b32-bcb6-0978767b5e55",
+              "name": "=output",
+              "value": "={{ $('Router Agent').last().json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1552,
+        -288
+      ],
+      "id": "f64a9490-3a5d-4c9a-b177-97e88442a197",
+      "name": "Взять черновик Router"
+    },
+    {
+      "parameters": {
+        "content": "Вход: форма на сайте / email (Gmail Trigger) → нормализация формата → PII-пайплайн (Detect PII via Regexp → Tokenize and replace PII → Проверка обезличивания). На выходе — sanitized_text: реальные имя/email заменены плейсхолдерами, дальше по системе идёт только обезличенный текст.",
+        "height": 784,
+        "width": 1312
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -592,
+        -288
+      ],
+      "typeVersion": 1,
+      "id": "051ae164-8352-4162-925f-643fc869f0c1",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "специализированные агенты (Workers)\norders_agent — статус заказа/доставки. goods_agent — наличие и характеристики товара. returns_warranty_agent — возврат (14 дней) и гарантия (12 мес), ReAct-логика. complaint_agent — жалобы, всегда эскалирует на человека. Данные из CRM идут через Заказы_CRM_view — без Имя_клиента/Email, чтобы личные данные клиента не уходили в LLM-провайдер. Каждый агент отвечает текстом + тегом [ESCALATE:reason] при необходимости.",
+        "height": 672,
+        "width": 2544,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -208,
+        576
+      ],
+      "typeVersion": 1,
+      "id": "a79aea89-084c-4ae2-9a63-9bbb5e10371b",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "Классифицирует обращение и вызывает нужного Worker-агента как инструмент (orders_agent / goods_agent / returns_warranty_agent / complaint_agent). Fallback Model (Groq) + Retry 5x при сбое основной модели. Полный отказ → эскалация в «Универсальный агент (Error fallback)».",
+        "height": 528,
+        "width": 1808,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        736,
+        32
+      ],
+      "typeVersion": 1,
+      "id": "783acafb-1391-4796-95e6-b76535b5e0ad",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "Розовый — Critic Agent\nПроверяет черновик ответа Router'а по чек-листу. Не прошёл → возврат Router'у на доработку (макс. 2 итерации). После одобрения — восстановление реальных PII (имя/email) перед отправкой.",
+        "height": 576,
+        "width": 1088,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        704,
+        -544
+      ],
+      "typeVersion": 1,
+      "id": "0881ae42-afd8-4ef2-b572-5f93616fc4c2",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "HITL (человек в цикле)\nПроверка эскалации: есть тег [ESCALATE:...] или деньги в ответе? Нет → «Отправить ответ (авто)» напрямую клиенту. Да → «Создать черновик (на проверку)» — Gmail Draft, ждёт подтверждения человека.",
+        "height": 592,
+        "width": 768,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1792,
+        -576
+      ],
+      "typeVersion": 1,
+      "id": "63293b90-340f-4bab-9da6-5467a726ff74",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Исходное обращение клиента:\n{{ $('Проверка обезличивания').first().json.sanitized_text }}\n\nИтоговый ответ системы:\n{{ $('Взять черновик Router').first().json.output }}",
+        "hasOutputParser": true,
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "Ты — Evaluation Agent в системе поддержки интернет-магазина. Твоя задача —\nоценить КАЧЕСТВО итогового ответа, который система подготовила клиенту.\nТы работаешь ПОСЛЕ того, как ответ уже прошёл проверку Critic — ты не влияешь\nна то, отправится ли ответ, только логируешь оценку качества для отчётности.\n\nНа вход ты получаешь:\n- исходное обращение клиента (текст, возможно с плейсхолдером вместо\n  имени/email — это нормально, не пытайся его расшифровать)\n- итоговый ответ системы (может начинаться с тега [AGENT:имя_агента] и\n  содержать тег [ESCALATE:причина] в конце — это техническая разметка, не\n  показывай её в своих полях, но используй как контекст)\n\nОцени по 5 критериям:\n\n1. correctness (корректность, 1-5). Соответствуют ли факты в ответе тому, что\n   логично ожидать от данных инструмента? Нет ли противоречий и придуманных\n   деталей? 5 — полностью точен, 1 — грубая фактическая ошибка.\n\n2. completeness (полнота, 1-5). Закрывает ли ответ вопрос клиента целиком?\n   5 — исчерпывающе, 1 — не отвечает по существу.\n\n3. politeness (вежливость, 1-5). Профессиональный, доброжелательный тон.\n   5 — образцовый тон, 1 — грубо или неуместно.\n\n4. hallucinations (наличие галлюцинаций, true/false). true — если в ответе\n   есть факт, который не мог быть получен из реальных данных.\n\n5. needs_human (нужна ли передача человеку, true/false). true — если ответ\n   содержит тег [ESCALATE:...], либо по содержанию видно, что нужна помощь\n   человека, даже без тега.\n\nФормат ответа — строго JSON:\n{\n  \"agent_used\": \"goods_agent | orders_agent | returns_warranty_agent | complaint_agent | unknown\",\n  \"correctness\": 1-5,\n  \"completeness\": 1-5,\n  \"politeness\": 1-5,\n  \"hallucinations\": true | false,\n  \"needs_human\": true | false,\n  \"justification\": \"1-2 предложения, кратко почему такие баллы\"\n}\n\nagent_used определи по тегу [AGENT:...] в начале ответа. Если тега нет — \"unknown\"."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1840,
+        -1136
+      ],
+      "id": "4df41c85-1bd4-4a09-bc66-51dd9196e042",
+      "name": "Evaluation Agent."
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-haiku-4.5",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1776,
+        -912
+      ],
+      "id": "f5a619fe-01f5-4d55-95a6-1cd48913c016",
+      "name": "OpenRouter Chat Model7",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "groq/compound-mini",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1856,
+        -816
+      ],
+      "id": "ed6eba4f-5ac4-43c8-a78e-68175838071a",
+      "name": "Groq Chat Model7",
+      "credentials": {
+        "groqApi": {
+          "name": "Groq account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"agent_used\": {\n      \"type\": \"string\",\n      \"enum\": [\"goods_agent\", \"orders_agent\", \"returns_warranty_agent\", \"complaint_agent\", \"unknown\"]\n    },\n    \"correctness\": { \"type\": \"integer\", \"minimum\": 1, \"maximum\": 5 },\n    \"completeness\": { \"type\": \"integer\", \"minimum\": 1, \"maximum\": 5 },\n    \"politeness\": { \"type\": \"integer\", \"minimum\": 1, \"maximum\": 5 },\n    \"hallucinations\": { \"type\": \"boolean\" },\n    \"needs_human\": { \"type\": \"boolean\" },\n    \"justification\": { \"type\": \"string\" }\n  },\n  \"required\": [\"agent_used\", \"correctness\", \"completeness\", \"politeness\", \"hallucinations\", \"needs_human\", \"justification\"]\n}",
+        "autoFix": true
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        2032,
+        -864
+      ],
+      "id": "2e404679-da8d-4587-b6ea-e2993368dd0d",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        2048,
+        -672
+      ],
+      "id": "3fe0d2b3-1d9c-44f1-b3f9-d5e1313a0022",
+      "name": "OpenRouter Chat Model8",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Evaluation Agent\nРаботает параллельно, не блокирует отправку клиенту. Оценивает финальный ответ по 5 критериям: correctness, completeness, politeness, hallucinations, needs_human. Пишет результат строкой в Google Sheets (Evaluation_Results).",
+        "height": 624,
+        "width": 1472,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1472,
+        -1216
+      ],
+      "typeVersion": 1,
+      "id": "e8901027-6cdc-4fe1-af44-7e89063237ad",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "Многоагентная система обработки обращений клиентов интернет-магазина. Обращения приходят через форму сайта и email, обезличиваются, маршрутизируются Router Agent'ом на 4 специализированных Worker-агента, проверяются Critic Agent'ом (петля доработки, макс. 2 итерации), автоматически отправляются либо уходят человеку на подтверждение (HITL) — и параллельно оцениваются Evaluation Agent'ом по 5 критериям с логированием в Google Sheets.",
+        "height": 464,
+        "width": 960,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1104,
+        -1024
+      ],
+      "typeVersion": 1,
+      "id": "7001cdea-c7a3-4f76-9d22-400e4bec3fbd",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_1",
+          "mode": "list",
+          "cachedResultName": "Кейс 1 — Интернет-магазин — база данных (Товары, Заказы, Гарантии)",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_1/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 33845033,
+          "mode": "list",
+          "cachedResultName": "Evaluation_Results",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_1/edit#gid=33845033"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now }}",
+            "customer_message": "={{ $('Проверка обезличивания').first().json.sanitized_text }}",
+            "agent_used": "={{ $json.output.agent_used }}",
+            "correctness": "={{ $json.output.correctness }}",
+            "completeness": "={{ $json.output.completeness }}",
+            "politeness": "={{ $json.output.politeness }}",
+            "hallucinations": "={{ $json.output.hallucinations }}",
+            "needs_human": "={{ $json.output.needs_human }}",
+            "justification": "={{ $json.output.justification }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "customer_message",
+              "displayName": "customer_message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "agent_used",
+              "displayName": "agent_used",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "correctness",
+              "displayName": "correctness",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "completeness",
+              "displayName": "completeness",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "politeness",
+              "displayName": "politeness",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "hallucinations",
+              "displayName": "hallucinations",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "needs_human",
+              "displayName": "needs_human",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "justification",
+              "displayName": "justification",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2352,
+        -1040
+      ],
+      "id": "1cf1c880-ac04-4dec-9537-8a7fc2757db1",
+      "name": "Log Evaluation",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Форма на сайте": {
+      "main": [
+        [
+          {
+            "node": "Нормализация - форма",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Нормализация - форма": {
+      "main": [
+        [
+          {
+            "node": "Detect PII via Regexp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Нормализация - email": {
+      "main": [
+        [
+          {
+            "node": "Detect PII via Regexp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect PII via Regexp": {
+      "main": [
+        [
+          {
+            "node": "Tokenize and replace PII",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tokenize and replace PII": {
+      "main": [
+        [
+          {
+            "node": "Проверка обезличивания",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Проверка обезличивания": {
+      "main": [
+        [
+          {
+            "node": "Router Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router Agent": {
+      "main": [
+        [
+          {
+            "node": "Critic Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Универсальный агент (Error Fallback).",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Router Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Нормализация - email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Router Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Универсальный агент (Error Fallback).",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Универсальный агент (Error Fallback).",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "goods_agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "goods_agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "goods_agent": {
+      "ai_tool": [
+        [
+          {
+            "node": "Router Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "orders_agent": {
+      "ai_tool": [
+        [
+          {
+            "node": "Router Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "orders_agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "orders_agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "returns_warranty_agent": {
+      "ai_tool": [
+        [
+          {
+            "node": "Router Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "returns_warranty_agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model4": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "returns_warranty_agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "check_order": {
+      "ai_tool": [
+        [
+          {
+            "node": "returns_warranty_agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_and_log_warranty": {
+      "ai_tool": [
+        [
+          {
+            "node": "returns_warranty_agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "complaint_agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model5": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "complaint_agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "complaint_agent": {
+      "ai_tool": [
+        [
+          {
+            "node": "Router Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_order1": {
+      "ai_tool": [
+        [
+          {
+            "node": "complaint_agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Проверка эскалации": {
+      "main": [
+        [
+          {
+            "node": "Отправить ответ (авто)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Создать черновик (на проверку",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check_order2": {
+      "ai_tool": [
+        [
+          {
+            "node": "orders_agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Восстановление PII перед отправкой": {
+      "main": [
+        [
+          {
+            "node": "Проверка эскалации",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_product": {
+      "ai_tool": [
+        [
+          {
+            "node": "goods_agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model6": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Critic Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model6": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Critic Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Critic Agent": {
+      "main": [
+        [
+          {
+            "node": "Проверка Critic.",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Проверка Critic.": {
+      "main": [
+        [
+          {
+            "node": "Взять черновик Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Router Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Взять черновик Router": {
+      "main": [
+        [
+          {
+            "node": "Восстановление PII перед отправкой",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Evaluation Agent.",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model7": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Evaluation Agent.",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model7": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Evaluation Agent.",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Evaluation Agent.",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model8": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Structured Output Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluation Agent.": {
+      "main": [
+        [
+          {
+            "node": "Log Evaluation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

@@ -1,0 +1,1510 @@
+{
+  "name": "Project 5 HR Data Pipeline Block #1",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1280,
+        224
+      ],
+      "id": "07d76cac-c52a-4875-b19f-ab1d21b0cdc9",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4o",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        496,
+        464
+      ],
+      "id": "d353eaa9-85d4-4048-89f4-27942761d86d",
+      "name": "OpenRouter Chat Model2",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "Extract all text from this resume image.",
+        "options": {
+          "systemMessage": "Extract all text from the resume image. Return only the raw text, no formatting, no comments. Do not add any information that is not present in the image. If any part of the text is unreadable, write [unreadable]."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        480,
+        224
+      ],
+      "id": "f02c7f41-e556-4537-a4ef-761f01ec3c31",
+      "name": "OCR — image text extraction",
+      "executeOnce": false,
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = $input.first().json.output || '';\n\nreturn [{\n  json: {\n    ...$input.first().json,\n    cleanText: text.trim()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        224
+      ],
+      "id": "a1971d5b-9bef-4399-986a-36c73c893e32",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserAutofixing",
+      "typeVersion": 1,
+      "position": [
+        1552,
+        208
+      ],
+      "id": "9d25526a-330f-41a4-ae51-78f132f3126f",
+      "name": "Auto-fixing Output Parser"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        384
+      ],
+      "id": "ca5f39a9-5558-425a-b025-b0fc7242ad5c",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"fullName\": \"Иван Иванов\",\n  \"email\": \"ivan@example.com\",\n  \"phone\": \"+79001234567\",\n  \"currentPosition\": \"Менеджер\",\n  \"currentCompany\": \"ООО Компания\",\n  \"skills\": \"Python, SQL, Excel\",\n  \"education\": \"МГУ, 2018\",\n  \"languages\": \"Русский — родной, Английский — B2\",\n  \"salaryExpectations\": \"100 000 руб.\",\n  \"professionalSkills\": \"Навык 1, Навык 2\",\n  \"achievements\": \"Увеличил продажи на 30%\",\n  \"careerFocus\": \"Развитие в сфере аналитики\",\n  \"summary\": \"Опытный специалист\",\n  \"score\": 7\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1968,
+        368
+      ],
+      "id": "e6cae96c-8394-48d8-803e-e59c8795d6e4",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2fb14666-e9b0-4f41-a090-742a456eed34",
+              "leftValue": "={{ $binary.Resume.mimeType }}",
+              "rightValue": "=pdf",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "77179e29-c26d-4478-8d04-00299068fe2b",
+              "leftValue": "={{ $binary.Resume.mimeType }}",
+              "rightValue": "image/png",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1600,
+        -32
+      ],
+      "id": "3c084c88-7e54-467e-8dfc-a1a9bba14658",
+      "name": "File Validation"
+    },
+    {
+      "parameters": {
+        "content": "`❌ DLQ: invalid or unsupported files land here for manual review — pipeline never crashes silently`Dead Letter Queue (DLQ)\nAll failed/invalid/duplicate files land here.\nPipeline never crashes — errors are logged silently.\nStatus codes: unsupported format, empty text, duplicate.\nStatus codes: \n- \"Unsupported format or empty file\"\n- \"Duplicate file — already processed\"",
+        "height": 304,
+        "width": 1216
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1984,
+        144
+      ],
+      "typeVersion": 1,
+      "id": "17e226c4-88e0-4113-8b9a-7cc83d447725",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "formTitle": "Загрузка резюме",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Resume",
+              "fieldType": "file",
+              "multipleFiles": false,
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Ссылка",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Должность"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        -1936,
+        -32
+      ],
+      "id": "e27e7b0c-7411-42df-b0c3-3fd4d3d30e2d",
+      "name": "Resume Upload Form",
+      "webhookId": "8df4409c-6922-4d01-a8b5-d2a23979d001"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json['Resume'].mimetype }}",
+                    "rightValue": "application/pdf",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "098efd08-721b-4d90-8dc5-83b26381a1ee"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "pdf"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "df4a5562-9f81-4321-af12-3720029332df",
+                    "leftValue": "={{ $json['Resume'].mimetype }}",
+                    "rightValue": "image/",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "image"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        48,
+        -48
+      ],
+      "id": "9f8290fc-2b55-4b2e-9d1b-c15737031920",
+      "name": "File Type Detection"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "Resume",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        560,
+        -208
+      ],
+      "id": "c3320f15-b901-41a1-bf0b-5cfa19b07aa3",
+      "name": "Extract Text from PDF"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_5",
+          "mode": "list",
+          "cachedResultName": "«Резюме AIM 82»",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_5/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Лист1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_5/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Ссылка": "={{ $('Resume Upload Form').item.json['Ссылка'] }}",
+            "Должность": "={{ $('Resume Upload Form').item.json['Должность'] }}",
+            "Текст": "={{ $json.text || $json.cleanText }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Ссылка",
+              "displayName": "Ссылка",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Должность",
+              "displayName": "Должность",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Текст",
+              "displayName": "Текст",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1168,
+        -32
+      ],
+      "id": "4548d129-3d11-48c9-8e17-1e8099072d0d",
+      "name": "Write Raw Text to AIM82",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_6",
+          "mode": "list",
+          "cachedResultName": "Копия AIM83",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_6/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_6/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Email": "={{ $('AI Agent — Resume Analysis').first().json.output.email }}",
+            "Последняя должность": "={{ $('AI Agent — Resume Analysis').first().json.output.currentPosition }}",
+            "Образование": "={{ $('AI Agent — Resume Analysis').item.json.output.education }}",
+            "Языки": "={{ $('AI Agent — Resume Analysis').item.json.output.languages }}",
+            "Общая оценка": "={{ $('AI Agent — Resume Analysis').item.json.output.score }}",
+            "Заключение от ИИ": "={{ $('AI Agent — Resume Analysis').item.json.output.summary }}",
+            "Имя": "={{ $('AI Agent — Resume Analysis').first().json.output.fullName }}",
+            "Телефон": "={{ \" \" + $('AI Agent — Resume Analysis').first().json.output.phone }}",
+            "Дата обработки": "={{ $now.toISO() }}",
+            "Имя файла": "={{ Object.values($('Resume Upload Form').first().binary)[0].fileName }}",
+            "Формат": "={{ Object.values($('Resume Upload Form').first().binary)[0].mimeType }}",
+            "Статус": "Успешно",
+            "Навыки": "={{ $('AI Agent — Resume Analysis').item.json.output.skills }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Имя",
+              "displayName": "Имя",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Телефон",
+              "displayName": "Телефон",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Последняя должность",
+              "displayName": "Последняя должность",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Навыки",
+              "displayName": "Навыки",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Образование",
+              "displayName": "Образование",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Языки",
+              "displayName": "Языки",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Общая оценка",
+              "displayName": "Общая оценка",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Дата обработки",
+              "displayName": "Дата обработки",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Имя файла",
+              "displayName": "Имя файла",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Формат",
+              "displayName": "Формат",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Статус",
+              "displayName": "Статус",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Заключение от ИИ",
+              "displayName": "Заключение от ИИ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2592,
+        -320
+      ],
+      "id": "6ef0127e-9d2b-4adc-81ea-d791549b7769",
+      "name": "Write Structured Data to AIM83",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_7",
+          "mode": "list",
+          "cachedResultName": "AIM Errors HR Flow",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_7/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Лист1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_7/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $now }}",
+            "File name": "={{ $binary.Resume.fileName }}",
+            "Format": "={{ $binary.Resume.mimeType }}",
+            "Status": "={{ $json.errorReason }}",
+            "Position": "={{ $json['Должность'] }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "File name",
+              "displayName": "File name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Format",
+              "displayName": "Format",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Position",
+              "displayName": "Position",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Raw responce",
+              "displayName": "Raw responce",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Action ",
+              "displayName": "Action ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -704,
+        304
+      ],
+      "id": "5f9914d7-0f95-40b5-b683-449cfc09cd33",
+      "name": "Error Log — AIM Errors",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "hrtest",
+          "mode": "list",
+          "cachedResultName": "hrtest"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1.3,
+      "position": [
+        2656,
+        -736
+      ],
+      "id": "ee332a84-fea7-4c27-bc9b-f7e72ed76e1d",
+      "name": "Pinecone — Store Resume Vector",
+      "credentials": {
+        "pineconeApi": {
+          "name": "Pinecone account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $('AI Agent — Resume Analysis').first().json.output.fullName }} | {{ $('AI Agent — Resume Analysis').first().json.output.currentPosition }} | {{ $('AI Agent — Resume Analysis').first().json.output.skills }} | {{ $('AI Agent — Resume Analysis').first().json.output.summary }}",
+        "textSplittingMode": "custom",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "name",
+                "value": "={{ $('AI Agent — Resume Analysis').first().json.output.fullName }}"
+              },
+              {
+                "name": "email",
+                "value": "={{ $('AI Agent — Resume Analysis').first().json.output.email }}"
+              },
+              {
+                "name": "position",
+                "value": "={{ $('AI Agent — Resume Analysis').first().json.output.currentPosition }}"
+              },
+              {
+                "name": "date",
+                "value": "={{ $now.toISO() }}"
+              },
+              {
+                "name": "skills",
+                "value": "={{ $('AI Agent — Resume Analysis').first().json.output.skills }}"
+              },
+              {
+                "name": "score",
+                "value": "={{ $('AI Agent — Resume Analysis').first().json.output.score }} "
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        2800,
+        -512
+      ],
+      "id": "fc902009-48d0-4420-a34c-851a04edbe10",
+      "name": "Document Loader"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        2416,
+        -464
+      ],
+      "id": "e8bb0b00-1fe1-426f-80f6-b32458082af0",
+      "name": "Embeddings text-embedding-3-small",
+      "credentials": {
+        "openAiApi": {
+          "name": "OpenAI account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chunkSize": 5000,
+        "options": {
+          "splitCode": "markdown"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        2912,
+        -304
+      ],
+      "id": "e50c66cd-0329-4355-835a-331d8cbe0300",
+      "name": "Text Splitter"
+    },
+    {
+      "parameters": {
+        "content": "Block 1 — Automated Resume Processing\nAuthor: Ilona Bila | Date: 2026-06-11\n\nAccepts PDF or image resumes via form. Detects file type automatically.\nPDF → text extraction. Image → OCR via GPT-4o.\nAI Agent analyzes resume and extracts 9 structured fields.\nOutput: Google Sheets (AIM82 raw text, AIM83 structured data) + Pinecone (vector embeddings).\n\nEmbedding Model: text-embedding-3-small (OpenAI)\nVector Database: Pinecone (index: hrtest)\nLLM: OpenRouter — GPT-4o (OCR) + GPT-4.1-mini (analysis)\nError handling: unsupported formats logged to AIM Errors sheet",
+        "height": 288,
+        "width": 880,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -2512,
+        -576
+      ],
+      "typeVersion": 1,
+      "id": "5fd49510-4522-4bef-a107-ce0a12e2e95f",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_6",
+          "mode": "list",
+          "cachedResultName": "Копия AIM83",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_6/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_6/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Имя файла",
+              "lookupValue": "={{ Object.values($('Resume Upload Form').first().binary)[0].fileName }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1136,
+        -192
+      ],
+      "id": "80ce5d4d-096a-4168-8800-caa5833f9863",
+      "name": "Check Duplicate — File",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_6",
+          "mode": "list",
+          "cachedResultName": "Копия AIM83",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_6/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_6/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Email",
+              "lookupValue": "={{ $json.output.email }}"
+            },
+            {
+              "lookupColumn": "Имя",
+              "lookupValue": "={{ $json.output.fullName }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1792,
+        -368
+      ],
+      "id": "af83fcf2-2f50-4733-ba60-9739adb1d114",
+      "name": "Check Duplicate — Name & Email",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "50b3116c-c81c-4c75-b1e0-0d9b2076972b",
+              "leftValue": "={{ Object.keys($('Check Duplicate — Name & Email').first().json).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2016,
+        -464
+      ],
+      "id": "bfa963db-4e42-471e-bae3-e2f032dc6edc",
+      "name": "Duplicate Name & Email?"
+    },
+    {
+      "parameters": {
+        "content": "Near Check Duplicate — File:\nLayer 1 Deduplication — File Check\nChecks AIM83 by filename before processing.\nSame file submitted twice → stop immediately.\nSaves API tokens — AI Agent never runs on duplicates.",
+        "height": 640,
+        "width": 864,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1136,
+        -480
+      ],
+      "typeVersion": 1,
+      "id": "0f757270-49ec-4df7-a886-f10e6c132a9d",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "Near Check Duplicate — Name & Email:\nLayer 2 Deduplication — Candidate Check\nChecks AIM83 by name AND email after AI analysis.\nCatches same candidate submitted with different file version.\nBoth conditions must match (AND) to be flagged as duplicate.",
+        "height": 240,
+        "width": 400,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1472,
+        -672
+      ],
+      "typeVersion": 1,
+      "id": "a44f3386-0d4f-4d9c-b43f-daeee42b06fb",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5c6ef408-13db-4dd3-99e7-c8289b0bb02c",
+              "name": "errorReason",
+              "value": "Duplicate file — already processed",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -496,
+        64
+      ],
+      "id": "faddedf3-2eb8-48d1-ae6a-0dbb567e6e89",
+      "name": "Error reason"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "61e30042-8be6-4b90-9cf8-8b440e31c320",
+              "leftValue": "={{ Object.keys($('Check Duplicate — File').first().json).length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -496,
+        -192
+      ],
+      "id": "e58cc18e-6189-4104-9ff6-f64af228e803",
+      "name": "New Fille?"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1c85120e-7989-4674-965b-7774bc0964c4",
+              "name": "errorReason",
+              "value": "Unsupported format or empty file",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1168,
+        128
+      ],
+      "id": "983e8ce0-5ff3-4d42-b078-340182052caa",
+      "name": "Error reason1"
+    },
+    {
+      "parameters": {
+        "content": "Auto-fixing Output Parser — Self-healing JSON\n\nCatches malformed AI output and auto-corrects before it reaches the write step. Pipeline never fails on bad JSON formatting.",
+        "height": 240,
+        "width": 336
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2192,
+        -16
+      ],
+      "typeVersion": 1,
+      "id": "6c9f96f6-24f3-490a-b0fe-40f834c99626",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "Pinecone — Document Loader + Text Splitter\n\nResume stored as a single chunk — not split.\nResumes are 1–2 pages. Splitting fragments the context — skills get separated from experience, name from role history. Vector search then returns incomplete matches and the AI evaluates fragments instead of a full candidate profile.\nSingle chunk = full context preserved on retrieval. Deliberate decision, not a default.",
+        "height": 288,
+        "width": 448
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3024,
+        -736
+      ],
+      "typeVersion": 1,
+      "id": "998aa5eb-3c18-49c0-98ce-8ffd84505b7b",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $('File Validation').first();\nreturn [{ json: item.json, binary: item.binary }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -848,
+        -192
+      ],
+      "id": "da3d2d9a-f0f2-4942-bd99-ea0ae8854080",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "14ebaf0d-3c50-4881-91f3-7b0100e1218a",
+              "name": "errorReason",
+              "value": "Duplicate — candidate with this name and email already exists",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2176,
+        -224
+      ],
+      "id": "69662430-f600-4645-ab3f-51705f607e38",
+      "name": "Error reason — Duplicate"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_7",
+          "mode": "list",
+          "cachedResultName": "AIM Errors HR Flow",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_7/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Лист1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_7/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $now.toISO() }}",
+            "File name": "={{ $('Resume Upload Form').first().binary ? Object.values($('Resume Upload Form').first().binary)[0].fileName : '' }}",
+            "Format": "={{ $('Code in JavaScript1').first().json['Резюме']?.mimetype || '' }}",
+            "Status": "Duplicate — same name and email",
+            "Position": "={{ $json.output?.currentPosition || '' }}",
+            "Raw responce": "={{ $json.errorReason }}",
+            "Action ": "Reject — already in system"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "File name",
+              "displayName": "File name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Format",
+              "displayName": "Format",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Position",
+              "displayName": "Position",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Raw responce",
+              "displayName": "Raw responce",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Action ",
+              "displayName": "Action ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2768,
+        32
+      ],
+      "id": "a2d56a17-e4a7-4fed-9cfb-8f8fcba3a465",
+      "name": "Error Log — AIM Errors 2",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.Текст }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are an HR analyst. Analyze the resume text and return ONLY a valid JSON object with exactly these fields. No explanations, no markdown, just JSON.\n{\n  \"fullName\": \"candidate full name\",\n  \"email\": \"email address ONLY — no phone, no other text\",\n  \"phone\": \"phone number ONLY — no email, no other text\",\n  \"currentPosition\": \"current or last job title\",\n  \"currentCompany\": \"current or last company name\",\n  \"skills\": [\"skill1\", \"skill2\"],\n  \"education\": \"degree and institution\",\n  \"languages\": \"languages and levels\",\n  \"summary\": \"3-5 sentence professional summary\",\n  \"score\": \"integer 1-10\"\n}\n\nScoring rubric for \"score\" — rate the candidate's overall strength based on:\n- Relevance and depth of experience for their stated/current position (0-4 points)\n- Breadth and seniority of skills listed (0-3 points)\n- Completeness of information provided — missing fields (education, contact info) lower the score (0-2 points)\n- Education/credentials relevance (0-1 point)\nSum these to a final integer 1-10. Do not default to a fixed number — scores must vary based on actual resume content. A sparse or junior resume should score notably lower (e.g. 3-5) than a detailed senior resume (e.g. 8-9).\n\nIf a field is not found in the text — write \"не указано\". Never invent data. Верни ТОЛЬКО валидный JSON объект. Без markdown, без ```json```, без дополнительного текста. Начни ответ с { и закончи }."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1376,
+        -32
+      ],
+      "id": "c64ad1c5-b04a-4427-9b1e-3b9c04c680d6",
+      "name": "AI Agent — Resume Analysis"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent — Resume Analysis",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "OCR — image text extraction",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCR — image text extraction": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Write Raw Text to AIM82",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-fixing Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent — Resume Analysis",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Auto-fixing Output Parser",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Auto-fixing Output Parser",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "File Validation": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicate — File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error reason1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resume Upload Form": {
+      "main": [
+        [
+          {
+            "node": "File Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "File Type Detection": {
+      "main": [
+        [
+          {
+            "node": "Extract Text from PDF",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "OCR — image text extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Text from PDF": {
+      "main": [
+        [
+          {
+            "node": "Write Raw Text to AIM82",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Raw Text to AIM82": {
+      "main": [
+        [
+          {
+            "node": "AI Agent — Resume Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Document Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Pinecone — Store Resume Vector",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings text-embedding-3-small": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone — Store Resume Vector",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text Splitter": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Document Loader",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Duplicate — File": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Duplicate — Name & Email": {
+      "main": [
+        [
+          {
+            "node": "Duplicate Name & Email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Duplicate Name & Email?": {
+      "main": [
+        [
+          {
+            "node": "Pinecone — Store Resume Vector",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Write Structured Data to AIM83",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error reason — Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error reason": {
+      "main": [
+        [
+          {
+            "node": "Error Log — AIM Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New Fille?": {
+      "main": [
+        [
+          {
+            "node": "File Type Detection",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error reason",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error reason1": {
+      "main": [
+        [
+          {
+            "node": "Error Log — AIM Errors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "New Fille?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error reason — Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Error Log — AIM Errors 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent — Resume Analysis": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicate — Name & Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

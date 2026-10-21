@@ -1,0 +1,934 @@
+{
+  "name": "Basilik — apply_cancellation (Subworkflow)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## apply_cancellation — общий переиспользуемый сабворкфлоу\n\nВызывается из Workflow 1: Cancellation & Reschedule Worker (через Tool: apply_cancellation) и из ветки 'отменил' в обработке ответа на напоминание.\n\nПосле импорта — скопировать workflowId ЭТОГО workflow и вставить его в:\n1. Ноду 'Tool: apply_cancellation' (Call n8n Sub-Workflow Tool) в Workflow 1\n2. Ноду 'Execute Workflow: apply_cancellation (из напоминания)' в Workflow 1\n\nРеальный вызов Stripe Refund API вынесен ЗА ПРЕДЕЛЫ этого файла: он должен срабатывать только после подтверждения администратором (отдельный маленький флоу/шаг по одобрению — см. память проекта). Здесь предоплата ставится в статус 'refund_due' + эскалация, но сам возврат не выполняется автоматически.",
+        "height": 380,
+        "width": 640,
+        "color": 4
+      },
+      "id": "0e18707f-b77f-4759-925b-0f1dbde583a3",
+      "name": "Sticky_e95cd54d",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "booking_id"
+            }
+          ]
+        }
+      },
+      "id": "521bc725-a3c3-41fa-b01e-57f3d9589e3e",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        272,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_2",
+          "mode": "list",
+          "cachedResultName": "Basilik DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "bookings",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "booking_id",
+              "lookupValue": "={{ $json.booking_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8b7795b9-efb0-4ae1-a3f7-167df0d04008",
+      "name": "Google Sheets: получить бронь",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        512,
+        272
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "cancelled",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "id": "f30ffda1-656a-492f-9bba-0d070db40534"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a668eea6-c263-4b6e-af29-08813b12b3ab",
+      "name": "If: уже отменена? (идемпотентность)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        752,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "status",
+              "type": "string",
+              "value": "already_cancelled"
+            },
+            {
+              "name": "refund_due",
+              "type": "boolean",
+              "value": false
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "value": "Бронь уже была отменена ранее."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6da449bc-b80e-4a4e-acb9-29f82eaf7089",
+      "name": "Set: результат — уже отменена",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        992,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_2",
+          "mode": "list",
+          "cachedResultName": "Basilik DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "bookings"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "booking_id": "={{ $json.booking_id }}",
+            "status": "cancelled",
+            "updated_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "booking_id"
+          ],
+          "schema": [
+            {
+              "id": "booking_id",
+              "displayName": "booking_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "chat_id",
+              "displayName": "chat_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "ref_token",
+              "displayName": "ref_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "time",
+              "displayName": "time",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "party_size",
+              "displayName": "party_size",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deposit_required",
+              "displayName": "deposit_required",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "deposit_amount_eur",
+              "displayName": "deposit_amount_eur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "deposit_status",
+              "displayName": "deposit_status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "payment_intent_id",
+              "displayName": "payment_intent_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "reminder_sent",
+              "displayName": "reminder_sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "source_channel",
+              "displayName": "source_channel",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "special_requests",
+              "displayName": "special_requests",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "updated_at",
+              "displayName": "updated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "4d3147d6-f3a9-4bc0-8952-239202212e04",
+      "name": "Google Sheets: bookings.status=cancelled",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        992,
+        320
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $input.item.json;\nconst visitDateTime = new Date(`${b.date}T${b.time}:00`);\nconst now = new Date();\nconst hoursUntilVisit = (visitDateTime.getTime() - now.getTime()) / 3600000;\nconst onTime = hoursUntilVisit > 3;\nconst depositPaid = b.deposit_status === 'paid';\nconst partySize = Number(b.party_size || 0);\nlet branch;\nif (onTime && depositPaid) branch = 'on_time_refund_due';\nelse if (onTime && !depositPaid) branch = 'on_time_no_deposit';\nelse if (!onTime && partySize >= 8 && depositPaid) branch = 'late_deposit_forfeit';\nelse branch = 'late_no_deposit';\nreturn [{ json: { ...b, hoursUntilVisit, onTime, depositPaid, branch } }];\n"
+      },
+      "id": "0171419e-2397-48cc-9f14-bb7e297d93c6",
+      "name": "Code: расчёт таймингов и депозита",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1232,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.branch }}",
+                    "rightValue": "on_time_refund_due",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "d1011190-46c5-4c9a-97b4-efe3e18b4b5f"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.branch }}",
+                    "rightValue": "on_time_no_deposit",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "95b91422-745f-49b7-b192-aa277678318d"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.branch }}",
+                    "rightValue": "late_deposit_forfeit",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "d712d038-4ce0-40e9-8a31-47c186b4bd40"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.branch }}",
+                    "rightValue": "late_no_deposit",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "5cbe50d9-f505-418d-8f76-0c5720fff44e"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "aff9dc0a-a541-4628-8503-78002bc3eea2",
+      "name": "Switch: сценарий отмены",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1472,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_2",
+          "mode": "list",
+          "cachedResultName": "Basilik DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "escalations"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "escalation_id": "={{ $now.toMillis() }}",
+            "created_at": "={{ $now.toISO() }}",
+            "reason": "refund_due",
+            "agent_source": "apply_cancellation",
+            "booking_id": "={{ $('Google Sheets: bookings.status=cancelled').item.json.booking_id }}",
+            "ref_token": "={{ $('Google Sheets: bookings.status=cancelled').item.json.ref_token }}",
+            "draft_reply": "Возврат предоплаты обрабатывается администратором.",
+            "money_involved": true,
+            "amount_eur": "={{ $json.deposit_amount_eur }}",
+            "status": "pending"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "escalation_id",
+              "displayName": "escalation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reason",
+              "displayName": "reason",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "agent_source",
+              "displayName": "agent_source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "booking_id",
+              "displayName": "booking_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "ref_token",
+              "displayName": "ref_token",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "guest_message_sanitized",
+              "displayName": "guest_message_sanitized",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "draft_reply",
+              "displayName": "draft_reply",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "money_involved",
+              "displayName": "money_involved",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "amount_eur",
+              "displayName": "amount_eur",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resolved_by",
+              "displayName": "resolved_by",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resolved_at",
+              "displayName": "resolved_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "resolution_note",
+              "displayName": "resolution_note",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "0cb0b945-c698-492e-a571-4ad1dbcba463",
+      "name": "Google Sheets: append escalations (refund_due)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1712,
+        48
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "=YOUR_TELEGRAM_CHAT_ID",
+        "text": "=💶 Требуется возврат предоплаты. booking_id={{ $json.booking_id }}, payment_intent_id={{ $json.payment_intent_id }}, сумма={{ $json.deposit_amount_eur }}€.\\nРеальный Stripe Refund выполняется отдельным шагом ПОСЛЕ вашего подтверждения (не автоматически).",
+        "additionalFields": {}
+      },
+      "id": "4efc7583-2d10-44d3-b41a-4a0c26f9ae59",
+      "name": "Telegram: уведомить админа (refund_due)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1952,
+        48
+      ],
+      "webhookId": "5d96f197-126d-487a-a382-c415af851478",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "status",
+              "type": "string",
+              "value": "cancelled"
+            },
+            {
+              "name": "refund_due",
+              "type": "boolean",
+              "value": true
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "value": "Бронь отменена вовремя. Возврат предоплаты обрабатывается — администратор подтвердит и запустит возврат."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ad21b691-e180-4da6-82c1-f813b1e575dd",
+      "name": "Set: результат — refund_due",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2192,
+        48
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "status",
+              "type": "string",
+              "value": "cancelled"
+            },
+            {
+              "name": "refund_due",
+              "type": "boolean",
+              "value": false
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "value": "Бронь отменена."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "79444fe5-103b-4d3d-9a41-dbb2aec4499d",
+      "name": "Set: результат — вовремя, без депозита",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1712,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "status",
+              "type": "string",
+              "value": "cancelled"
+            },
+            {
+              "name": "refund_due",
+              "type": "boolean",
+              "value": false
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "value": "Бронь отменена. Отмена позднее чем за 3 часа для группы от 8 человек — предоплата не возвращается согласно политике."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7e54a432-9de2-4035-a1ff-9cdee7ad509e",
+      "name": "Set: результат — поздно, депозит не возвращается",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1712,
+        464
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "status",
+              "type": "string",
+              "value": "cancelled"
+            },
+            {
+              "name": "refund_due",
+              "type": "boolean",
+              "value": false
+            },
+            {
+              "name": "message",
+              "type": "string",
+              "value": "Бронь отменена."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5f821227-5ed3-460c-b0cf-c3b1f6b5d8f8",
+      "name": "Set: результат — поздно, без депозита",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1712,
+        624
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: получить бронь",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: получить бронь": {
+      "main": [
+        [
+          {
+            "node": "If: уже отменена? (идемпотентность)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: уже отменена? (идемпотентность)": {
+      "main": [
+        [
+          {
+            "node": "Set: результат — уже отменена",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets: bookings.status=cancelled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: bookings.status=cancelled": {
+      "main": [
+        [
+          {
+            "node": "Code: расчёт таймингов и депозита",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: расчёт таймингов и депозита": {
+      "main": [
+        [
+          {
+            "node": "Switch: сценарий отмены",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch: сценарий отмены": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: append escalations (refund_due)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set: результат — вовремя, без депозита",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set: результат — поздно, депозит не возвращается",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set: результат — поздно, без депозита",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: append escalations (refund_due)": {
+      "main": [
+        [
+          {
+            "node": "Telegram: уведомить админа (refund_due)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: уведомить админа (refund_due)": {
+      "main": [
+        [
+          {
+            "node": "Set: результат — refund_due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

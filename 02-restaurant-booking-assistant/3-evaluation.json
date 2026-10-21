@@ -1,0 +1,453 @@
+{
+  "name": "Basilik — Workflow 3 (Evaluation)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "Workflow 3 — Evaluation (полностью отдельный, асинхронный). Запускается Schedule Trigger раз в сутки, читает весь conversations_log целиком. Evaluation Agent оценивает final_reply_text по 5 критериям (соответствие, полнота, вежливость, hallucinations, needs_human) → пишет строку в eval_log, где operation_id = conversation_log_id.",
+        "height": 316,
+        "width": 1372,
+        "color": 4
+      },
+      "id": "f9a627c0-86bd-4c53-b11b-5ba344fd26d9",
+      "name": "Sticky_workflow3_purpose",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        -352
+      ]
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_2",
+          "mode": "list",
+          "cachedResultName": "Basilik DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1041028922,
+          "mode": "list",
+          "cachedResultName": "conversations_log,",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit#gid=1041028922"
+        },
+        "options": {}
+      },
+      "id": "8a9fc65e-b60e-462a-83ea-ef0e7ed8480a",
+      "name": "Google Sheets: найти operation_log по conversation_log_id",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        528,
+        272
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      },
+      "notes": "alwaysOutputData=true специально: если строка operation_log ещё не появилась (гонка с параллельной записью в Workflow 1), нода всё равно должна отдать пустой item дальше, а не оборвать цепочку — иначе оценка этой строки conversations_log потеряется молча."
+    },
+    {
+      "parameters": {
+        "jsCode": "const conv = $input.item.json || {};\n\nreturn [{\n  json: {\n    conversation_log_id: conv.conversation_log_id,\n    operation_id: conv.conversation_log_id,\n    guest_message_sanitized: conv.guest_message_sanitized || '',\n    final_reply_text: conv.final_reply_text || '',\n    channel: conv.channel || '',\n  }\n}];"
+      },
+      "id": "3393b06a-a35e-4d3f-b6fc-03ff7ca67fa0",
+      "name": "Code: подготовить operation_id (fallback)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=guest_message_sanitized: {{ $json.guest_message_sanitized }}\nfinal_reply_text: {{ $json.final_reply_text }}\nchannel: {{ $json.channel }}",
+        "hasOutputParser": true,
+        "needsFallback": true,
+        "options": {
+          "systemMessage": "Ты — Evaluation Agent (Judge) ресторана Базилик. Ты работаешь полностью асинхронно, ПОСЛЕ того как ответ уже ушёл гостю — твоя оценка ни на что не влияет в моменте, это ретроспективный аудит качества, а не часть основного диалога.\n\nВХОД: guest_message_sanitized (исходное sanitized-сообщение гостя), final_reply_text (финальный текст, который реально ушёл гостю), channel (text/voice).\n\nОЦЕНИ ПО 5 КРИТЕРИЯМ:\n1. relevance_score (целое число 1-5) — соответствие: отвечает ли final_reply_text именно на то, что спросил гость.\n2. completeness_score (целое число 1-5) — полнота: если сообщение гостя было составным (несколько тем/вопросов сразу) — закрыты ли ВСЕ, а не только часть.\n3. politeness_score (целое число 1-5) — вежливость: тон уместный, без канцелярита и без грубости, соответствует стилю ресторана среднего+ сегмента.\n4. hallucination_flag (true/false) — есть ли в ответе утверждения, поданные как факт (конкретные цифры, аллергены, цены, часы работы, условия политики), которые выглядят неправдоподобно специфичными или внутренне противоречивыми. ВАЖНО: у тебя НЕТ доступа к базе знаний ресторана (Qdrant: basilik_menu, basilik_policy) — ты не можешь дословно сверить факты, только оценить правдоподобность и внутреннюю согласованность текста. НЕ ставь true просто потому что не можешь проверить факт — ставь true только при явных признаках подмены, противоречия самому себе или неправдоподобной точности. При сомнении — false, и обязательно опиши сомнение в judge_comment.\n5. needs_human_flag (true/false) — твоя НЕЗАВИСИМАЯ оценка: должен ли был этот ответ уйти на проверку человеку (деньги, здоровье/аллергены, неоднозначность, недовольство гостя, явная ошибка) — независимо от того, что решила система в моменте. Тебе намеренно не передаётся, было ли реальное решение системы escalate — это отдельная, незамутнённая вторая оценка для аудита.\n\nЧЕГО ТЫ НЕ ДЕЛАЕШЬ:\n- Не переписываешь и не улучшаешь ответ, только оцениваешь его.\n- Не занижаешь оценки за то, что не можешь проверить — используй hallucination_flag=false + комментарий вместо этого.\n- Не выдумываешь факты о ресторане, чтобы оценить ответ — оценивай по внутренней логике и правдоподобию текста.\n\nФОРМАТ ВЫВОДА — строго один JSON-объект: {relevance_score, completeness_score, politeness_score, hallucination_flag, needs_human_flag, judge_comment}. judge_comment — 2-4 предложения на русском, кратко объясняющие оценку по всем пяти пунктам."
+        }
+      },
+      "id": "0512bc54-ddcf-4929-9c1d-0f3a482e87fa",
+      "name": "AI Agent: Evaluation Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1008,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-5",
+        "options": {}
+      },
+      "id": "1cb7a3e7-f295-479c-afc1-260e7669dbd3",
+      "name": "OpenRouter Chat Model (Evaluation Agent)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        928,
+        624
+      ],
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "groq/compound",
+        "options": {}
+      },
+      "id": "5a2754b0-c0ca-4ebc-8d42-998d9e01cba4",
+      "name": "Groq Chat Model (fallback, Evaluation Agent)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        1088,
+        480
+      ],
+      "credentials": {
+        "groqApi": {
+          "name": "Groq account 5"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"title\": \"EvaluationAgentOutput\",\n  \"type\": \"object\",\n  \"required\": [\n    \"relevance_score\",\n    \"completeness_score\",\n    \"politeness_score\",\n    \"hallucination_flag\",\n    \"needs_human_flag\",\n    \"judge_comment\"\n  ],\n  \"properties\": {\n    \"relevance_score\": {\n      \"type\": \"integer\",\n      \"minimum\": 1,\n      \"maximum\": 5\n    },\n    \"completeness_score\": {\n      \"type\": \"integer\",\n      \"minimum\": 1,\n      \"maximum\": 5\n    },\n    \"politeness_score\": {\n      \"type\": \"integer\",\n      \"minimum\": 1,\n      \"maximum\": 5\n    },\n    \"hallucination_flag\": {\n      \"type\": \"boolean\"\n    },\n    \"needs_human_flag\": {\n      \"type\": \"boolean\"\n    },\n    \"judge_comment\": {\n      \"type\": \"string\"\n    }\n  }\n}"
+      },
+      "id": "2a12e1e0-b8a8-4943-babe-aa487b21ef49",
+      "name": "Structured Output Parser (Evaluation Agent)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1456,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "6e03252f-b6ac-4b93-8d6b-c390b79f3f77",
+      "name": "Auto-fixing Output Parser (Evaluation Agent)",
+      "type": "@n8n/n8n-nodes-langchain.outputParserAutofixing",
+      "typeVersion": 1,
+      "position": [
+        1312,
+        544
+      ],
+      "notes": "Layer 1 Validation Loop (как в Router/Booking/Menu/Cancellation/FAQ Worker): невалидный JSON от Judge → 1 retry автоматически."
+    },
+    {
+      "parameters": {
+        "jsCode": "const prep = $('Code: подготовить operation_id (fallback)').item.json;\nconst judge = $input.item.json.output;\n\nreturn [{\n  json: {\n    operation_id: prep.operation_id,\n    relevance_score: judge.relevance_score,\n    completeness_score: judge.completeness_score,\n    politeness_score: judge.politeness_score,\n    hallucination_flag: judge.hallucination_flag,\n    needs_human_flag: judge.needs_human_flag,\n    judge_comment: judge.judge_comment,\n  }\n}];\n"
+      },
+      "id": "316ed192-0dcc-4234-abfc-7eeb3df4864d",
+      "name": "Code: собрать строку eval_log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1488,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_2",
+          "mode": "list",
+          "cachedResultName": "Basilik DB",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 647449259,
+          "mode": "list",
+          "cachedResultName": "eval_logeval_log",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_2/edit#gid=647449259"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "eval_id": "={{ $now.toMillis() }}",
+            "operation_id": "={{ $json.operation_id }}",
+            "evaluated_at": "={{ $now.toISO() }}",
+            "judge_model": "openrouter/anthropic/claude-sonnet-4.5 (fallback: groq/llama-3.3-70b-versatile)",
+            "relevance_score": "={{ $json.relevance_score }}",
+            "completeness_score": "={{ $json.completeness_score }}",
+            "politeness_score": "={{ $json.politeness_score }}",
+            "hallucination_flag": "={{ $json.hallucination_flag }}",
+            "needs_human_flag": "={{ $json.needs_human_flag }}",
+            "judge_comment": "={{ $json.judge_comment }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "eval_id",
+              "displayName": "eval_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "operation_id",
+              "displayName": "operation_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "evaluated_at",
+              "displayName": "evaluated_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "judge_model",
+              "displayName": "judge_model",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "relevance_score",
+              "displayName": "relevance_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "completeness_score",
+              "displayName": "completeness_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "politeness_score",
+              "displayName": "politeness_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "hallucination_flag",
+              "displayName": "hallucination_flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "needs_human_flag",
+              "displayName": "needs_human_flag",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "judge_comment",
+              "displayName": "judge_comment",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "sample_group",
+              "displayName": "sample_group",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "964beb1c-660c-47fa-80de-c3aa3ca882da",
+      "name": "Google Sheets: append eval_log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1728,
+        272
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 3
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        304,
+        272
+      ],
+      "id": "250e1f9c-4f72-4ed7-a9f9-363448d61fb1",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Sheets: найти operation_log по conversation_log_id": {
+      "main": [
+        [
+          {
+            "node": "Code: подготовить operation_id (fallback)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: подготовить operation_id (fallback)": {
+      "main": [
+        [
+          {
+            "node": "AI Agent: Evaluation Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent: Evaluation Agent": {
+      "main": [
+        [
+          {
+            "node": "Code: собрать строку eval_log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: собрать строку eval_log": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: append eval_log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model (Evaluation Agent)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent: Evaluation Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Auto-fixing Output Parser (Evaluation Agent)",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model (fallback, Evaluation Agent)": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent: Evaluation Agent",
+            "type": "ai_languageModel",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser (Evaluation Agent)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Auto-fixing Output Parser (Evaluation Agent)",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-fixing Output Parser (Evaluation Agent)": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent: Evaluation Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets: найти operation_log по conversation_log_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}

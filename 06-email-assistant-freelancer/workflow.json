@@ -1,0 +1,972 @@
+{
+  "name": "Project 3 E-mail Assistant to freelancer",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        80,
+        -48
+      ],
+      "id": "86628e89-b863-47f3-b788-2a1537830508",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "~anthropic/claude-haiku-latest",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1184,
+        16
+      ],
+      "id": "f6953c48-d965-412d-9f8f-c1debb4de206",
+      "name": "OpenRouter Chat Model1",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1952,
+        0
+      ],
+      "id": "bfeff332-9f90-4cdc-b98a-c5192b6371b9",
+      "name": "OpenRouter Chat Model2",
+      "credentials": {
+        "openRouterApi": {
+          "name": "OpenRouter account 9"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            },
+            {}
+          ]
+        },
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -496,
+        -240
+      ],
+      "id": "9a1930f8-8422-4322-90f5-dea2e7ff1b68",
+      "name": "Gmail Trigger Receive Email",
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const email = $input.first().json;\n\nconst from = email.From || email.from || '';\nconst subject = email.Subject || email.subject || '';\nconst cleanFrom = from.replace(/.*<(.+)>/, '$1').trim();\n\nreturn [{\n  json: {\n    from: cleanFrom,\n    subject: subject || '(no subject)',\n    body: email.snippet || '',\n    threadId: email.threadId,\n    messageId: email.id,\n    date: email.internalDate\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -192,
+        -240
+      ],
+      "id": "4f5eb307-0c60-41b3-9859-3d553f909a3b",
+      "name": "Format Email Data"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Today's date: {{ $now.toISO() }}\n\nFrom: {{ $('Format Email Data').first().json.from }}\nSubject: {{ $('Format Email Data').first().json.subject }}\nBody: {{ $('Format Email Data').first().json.body }}",
+        "options": {
+          "systemMessage": "Ты — email-ассистент фрилансера-разработчика.\nТвоя задача — анализировать входящие письма и классифицировать\nих для автоматической маршрутизации. Ты не отвечаешь на письма\nнапрямую — только выставляешь флаги и возвращаешь JSON.\n\nПрочитай письмо и определи все параметры:\n1. Нужно ли на него отвечать (needs_reply)\n2. Содержит ли оно встречу или приглашение (is_meeting)\n3. Это новый лид или потенциальный клиент (is_new_lead)\n4. Срочность письма (urgency)\n5. Краткое объяснение решения (reason)\n6. Детали встречи если is_meeting = true\n\nПРАВИЛА КЛАССИФИКАЦИИ:\n\nneeds_reply: true\n— клиент задаёт вопрос, просит оценку, сообщает о баге,\nждёт подтверждения или уточнения по проекту.\n\nis_meeting: true\n— письмо содержит конкретную дату/время встречи, созвон,\nприглашение в Zoom/Meet, просьбу «давайте обсудим во вторник».\n\nis_new_lead: true\n— письмо от незнакомого отправителя с запросом на сотрудничество,\nвопросом о стоимости услуг, новым проектом или партнёрством.\nПризнаки: человек впервые пишет, описывает свою задачу,\nспрашивает «сколько стоит», «можете ли вы», «ищу разработчика».\n\nurgency:\n— high: письмо содержит слова срочно, ASAP, сегодня, горит,\n  дедлайн, баг на проде, не работает, критично\n— medium: обычный рабочий вопрос без признаков срочности\n— low: знакомство, общий вопрос, newsletter, не требует быстрого ответа\n\nДЕТАЛИ ВСТРЕЧИ (заполняй только если is_meeting = true):\n— meeting_title: краткое название из темы письма,\n  если тема не информативна — составь из контекста письма,\n  если встречи нет — null\n— meeting_date: вычисли точную дату используя сегодняшнюю\n  дату переданную в промпте. Учитывай относительные даты:\n  \"завтра\", \"в пятницу\", \"через неделю\", \"на следующей неделе\".\n  Формат: YYYY-MM-DD (например 2026-05-22).\n  Если дата не указана явно и не вычисляется — null\n— meeting_time: точное время из текста письма.\n  Формат: HH:MM (например 14:30).\n  Если время не указано явно — null\n— meeting_duration: длительность встречи в минутах из текста.\n  Если не указано — null\n\nДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА:\n— Все флаги независимы, можно комбинировать любые\n— is_new_lead и needs_reply могут быть оба true одновременно\n— Рассылки, GitHub-уведомления, чеки, автоматические алерты:\n  все флаги false, urgency = low\n— Если отправитель незнакомый но письмо явно автоматическое —\n  is_new_lead: false\n\nПЕРЕСЛАННЫЕ ПИСЬМА:\n— Если тема начинается с Fwd, FW, Пересл — это пересланное письмо\n— Анализируй ТОЛЬКО последнее сообщение, игнорируй цитаты (> или ---)\n— Найди исходного отправителя в строке «From:» внутри цитаты\n— Используй этот адрес как получателя ответа\n— Добавь флаг: \"is_forward\": true | false\nНЕГАТИВНЫЕ СЦЕНАРИИ:\n— Автоответ (Out of Office, Vacation, Auto-Reply): \n  все флаги false, urgency = low, reason = \"автоответ\"\n— Спам/рассылка: все флаги false, urgency = low\n— Пересылка (Fwd, FW): найди исходного отправителя \n  в строке From: внутри цитаты\n— Несколько вопросов: needs_reply = true, \n  reason должен упомянуть что вопросов несколько\n— Иностранный язык: отвечай на том же языке что письмо\n\nУНИВЕРСАЛЬНОЕ ПРАВИЛО:\nЕсли ситуация непонятна — все флаги false, \nneeds_reply = false, верни в ignore.\n\nОтвечай ТОЛЬКО валидным JSON, без пояснений вне него:\n{\n  \"needs_reply\": true | false,\n  \"is_meeting\": true | false,\n  \"is_new_lead\": true | false,\n  \"urgency\": \"high | medium | low\",\n  \"reason\": \"одно предложение на русском\",\n  \"meeting_title\": \"название или null\",\n  \"meeting_date\": \"YYYY-MM-DD или null\",\n  \"meeting_time\": \"HH:MM или null\",\n  \"meeting_duration\": 60 | null\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        128,
+        -240
+      ],
+      "id": "56eca9d1-dd96-4662-b557-7ac0f330a694",
+      "name": "Classify Email",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first().json.output || '';\nconst clean = raw.replace(/```json|```/g, '').trim();\nconst parsed = JSON.parse(clean);\n\nconst meetingReady = parsed.is_meeting === true \n  && parsed.meeting_date !== null \n  && parsed.meeting_time !== null;\n\nreturn [{\n  json: {\n    needs_reply: parsed.needs_reply ?? false,\n    is_meeting: parsed.is_meeting ?? false,\n    is_new_lead: parsed.is_new_lead ?? false,\n    urgency: parsed.urgency ?? 'low',\n    reason: parsed.reason ?? '',\n    meeting_title: parsed.meeting_title ?? null,\n    meeting_date: parsed.meeting_date ?? null,\n    meeting_time: parsed.meeting_time ?? null,\n    meeting_duration: parsed.meeting_duration ?? null,\n    meeting_ready: meetingReady\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        -240
+      ],
+      "id": "94d760e6-15ae-448f-aba5-8d8135d1bce4",
+      "name": "Parse AI Flags",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "af174ef3-f611-4d99-ae07-bdae2175aba5",
+                    "leftValue": "={{ $json.is_meeting }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "meeting"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "9412e30c-2c4a-4412-97f0-72f99ecefc59",
+                    "leftValue": "={{ $json.is_new_lead }}",
+                    "rightValue": "true",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "lead"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.needs_reply }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "equals"
+                    },
+                    "id": "b36b663d-8457-4629-8ee5-a863264bb324"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "reply "
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": "extra",
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        896,
+        -256
+      ],
+      "id": "7d44bf7e-cdd8-4d5a-911a-078fa0d1a825",
+      "name": "Route by Type"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Subject: {{ $('Format Email Data').first().json.subject }}\n\nПисьмо от клиента:\n{{ $('Format Email Data').first().json.body }}\n\nEmail отправителя: {{ $('Format Email Data').first().json.from }}\nСрочность: {{ $('Parse AI Flags').first().json.urgency }}",
+        "options": {
+          "systemMessage": "CRITICAL RULE — LANGUAGE:\nCarefully detect the language of the incoming email\nfrom the Subject and Body text.\nReply ONLY in the exact same language as the email.\nExamples:\n- Email in English → reply in English\n- Email in Russian → reply in Russian\n- Email in German → reply in German\n- Email in any other language → reply in that language\nNEVER default to Russian or English.\nNEVER mix languages.\nThis rule overrides everything else.\n\nYou are a professional assistant for a freelance developer.\nYour task is to write a draft reply to an incoming email\nfrom an existing client.\n\nRULES:\n- Write in first person, professionally but in a friendly tone\n- The email body may contain quoted previous messages \n  from the thread (lines starting with > or ---)\n- Read the full thread context to understand the \n  conversation history\n- Reference previous exchanges when relevant to \n  give a more contextual and accurate reply\n- Strictly reply in the same language as the incoming email\n- Length: 3–5 sentences\n- Do not add the email subject into the text\n- Do not use placeholders like [name] or [date]\n- Return ONLY the email text, no explanations or introductions\n- If subject is empty or \"(no subject)\" — create a relevant \n  subject from the email body context.\n  Example: \"Re: question about corporate pricing\"\n- If the email contains multiple questions — answer each \n  one separately as a numbered list\n- Do not merge answers into one paragraph\n- Do not skip any question — if unsure write: \n  \"I will get back to you on this separately\"\n- If more than 3 questions — add a suggestion to jump \n  on a call to cover everything efficiently\nURGENCY:\n- If urgency = high — start the reply by acknowledging\n  urgency in the same language as the email.\n  Be brief and specific.\n- If urgency = medium — standard friendly tone\n- If urgency = low — slightly warmer tone, no rush\n\nIF DETAILS ARE INSUFFICIENT:\n- Do not ask clarifying questions\n- Write that the task is accepted and work is in progress\n- Give approximate timelines if possible\n\nPROJECT CONTEXT:\nYou have access to a table with current client projects.\nUse it when the email concerns deadlines, status or\nproject details. When you receive an email — find the sender\nin the Email column of the projects table and use their\nproject data in the reply. Do not mention in the reply\nthat you are looking at the table."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1264,
+        -96
+      ],
+      "id": "305cfca5-51a1-4ab4-ba2c-d49bd6b0506e",
+      "name": "Write Reply Draft",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "=Re: {{ $('Format Email Data').first().json.subject }}",
+        "message": "={{ $json.output }}",
+        "options": {
+          "threadId": "={{ $('Format Email Data').first().json.threadId }}",
+          "sendTo": "={{ $('Format Email Data').first().json.from }}"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1616,
+        -80
+      ],
+      "id": "8f04daee-37a6-46d1-8d5d-a55e15328cfd",
+      "name": "Save Reply Draft",
+      "webhookId": "b1d637b0-8b3a-4fd8-9513-693ddc08bfdd",
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "e5427c3e-f24c-41dd-9dc7-e5f576c4378b",
+              "leftValue": "={{ $('Parse AI Flags').item.json.meeting_ready }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1504,
+        -480
+      ],
+      "id": "6d9df863-4870-4014-a313-1bfa73d5cbcb",
+      "name": "Check Meeting Ready"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "mode": "list",
+          "value": "you@example.com"
+        },
+        "start": "={{ $('Parse AI Flags').first().json.meeting_date }}T{{ $('Parse AI Flags').first().json.meeting_time }}:00",
+        "end": "={{ $('Parse AI Flags').first().json.meeting_date }}T{{ $('Parse AI Flags').first().json.meeting_time }}:00",
+        "additionalFields": {
+          "attendees": [
+            "={{ $('Format Email Data').first().json.from }}"
+          ],
+          "description": "= {{ $('Format Email Data').first().json.body }}",
+          "summary": "={{ $('Parse AI Flags').first().json.meeting_title }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1808,
+        -608
+      ],
+      "id": "a8f1d587-b153-4f7e-bfef-54165d8926bf",
+      "name": "Create Calendar Event",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "name": "Google Calendar account 6"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "=Re: {{ $('Format Email Data').first().json.subject }}",
+        "message": "=Thank you! I have added our meeting to my calendar  for {{ $('Parse AI Flags').first().json.meeting_date }}  at {{ $('Parse AI Flags').first().json.meeting_time }}.  Looking forward to speaking with you!",
+        "options": {
+          "threadId": "={{ $('Format Email Data').first().json.threadId }}",
+          "sendTo": "={{ $('Format Email Data').first().json.from }}"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2176,
+        -608
+      ],
+      "id": "b0471be4-db71-412e-b062-1dd04655dea4",
+      "name": "Save Meeting Confirmation",
+      "webhookId": "08674b62-4776-4162-8ff9-4b26a5938aa7",
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "=Re: {{ $('Format Email Data').first().json.subject }}",
+        "message": "=Thank you for reaching out!   To schedule our meeting please pick a convenient  time here: https://calendly.com/your-link  Looking forward to speaking with you!",
+        "options": {
+          "threadId": "={{ $('Format Email Data').first().json.threadId }}"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2176,
+        -416
+      ],
+      "id": "70861d30-e705-49f2-9160-0b095923c0d9",
+      "name": "Save Calendly Link",
+      "webhookId": "35252d31-2cac-4a64-b411-d940d9174bac",
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Subject: {{ $('Format Email Data').first().json.subject }}\n\nEmail from new lead:\n{{ $('Format Email Data').first().json.body }}\n\nSender: {{ $('Format Email Data').first().json.from }}",
+        "options": {
+          "systemMessage": "Ты — профессиональный ассистент фрилансера-разработчика.\nНаписал потенциальный новый клиент.\n\nЯЗЫК ОТВЕТА:\n- Внимательно определи язык входящего письма по тексту и теме\n- Если письмо на английском — отвечай ТОЛЬКО на английском\n- Если письмо на русском — отвечай ТОЛЬКО на русском\n- Если письмо на другом языке — отвечай на том же языке\n- Никогда не смешивай языки в одном ответе\n\nСОДЕРЖАНИЕ ОТВЕТА:\n- Поблагодари за интерес\n- Упомяни конкретно что человек просит из его письма\n- Коротко опиши что ты делаешь (веб-разработка,\n  создание сайтов и приложений)\n- Предложи созвониться или уточни детали проекта\n- Тон: дружелюбный, уверенный, не продающий\n- Длина: 4–6 предложений\n- If subject is empty or \"(no subject)\" — create a relevant \n  subject from the email body context.\n  Example: \"Re: question about corporate pricing\"\n\nВерни ТОЛЬКО текст письма, без пояснений и вступлений."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1808,
+        -256
+      ],
+      "id": "a40b955e-1ae1-41f7-a157-15d8751be111",
+      "name": "Write Lead Reply"
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "=Re: {{ $('Format Email Data').first().json.subject }}",
+        "message": "={{ $json.output }}",
+        "options": {
+          "threadId": "={{ $('Format Email Data').first().json.threadId }}",
+          "sendTo": "={{ $('Format Email Data').first().json.from }}"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2384,
+        -256
+      ],
+      "id": "fb73d43a-2b82-4b4d-b6b1-282dd5fd7543",
+      "name": "Save Lead Draft",
+      "webhookId": "700402dd-ee96-4d18-ac74-152bda09d53c",
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d639b4a3-07f4-4466-9a1e-cad2b3703f1e",
+              "leftValue": "={{ $json.urgency }}",
+              "rightValue": "high",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        624,
+        368
+      ],
+      "id": "dc725368-19a4-434e-bd00-0a43235e2ebd",
+      "name": "Check Urgency"
+    },
+    {
+      "parameters": {
+        "chatId": "YOUR_TELEGRAM_CHAT_ID",
+        "text": "=🔴 URGENT EMAIL!  From: {{ $('Format Email Data').first().json.from }} Subject: {{ $('Format Email Data').first().json.subject }} Urgency: {{ $json.urgency }} Reason: {{ $json.reason }}  {{ $('Format Email Data').first().json.body }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        896,
+        352
+      ],
+      "id": "521e2340-4699-4931-9cb4-333e42724897",
+      "name": "Alert Urgent Email",
+      "webhookId": "bed45339-d622-4284-8988-c23337e3a745",
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account 5"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        896,
+        176
+      ],
+      "id": "196fbfbe-2e34-4399-9386-e2d683ed09cd",
+      "name": "Ignore Email"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "База текущих проектов фрилансера. Колонки: Client, Email,\nProject, Status, Deadline, Budget, Notes.\nИспользуй когда клиент спрашивает о сроках, статусе,\nдеталях проекта. Найди строку где Email совпадает\nс email отправителя письма.",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_8",
+          "mode": "list",
+          "cachedResultName": "N8N table",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Projects",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_8/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "=Email",
+              "lookupValue": "={{ $('Format Email Data').first().json.from }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        1536,
+        128
+      ],
+      "id": "620dd731-a7e0-4587-b03c-bd00eb4e8870",
+      "name": "Read Client Projects DB",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      },
+      "notes": "База текущих проектов фрилансера. Колонки: Client, Email, \nProject, Status, Deadline, Budget, Notes.\n"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID_8",
+          "mode": "list",
+          "cachedResultName": "N8N table",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1587893788,
+          "mode": "list",
+          "cachedResultName": "New leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID_8/edit#gid=1587893788"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ $now.toISO() }}",
+            "From": "={{ $('Format Email Data').first().json.from }}",
+            "Email": "={{ $('Format Email Data').first().json.from }}",
+            "Subject": "={{ $('Format Email Data').first().json.subject }}",
+            "Snippet": "={{ $('Format Email Data').first().json.body }}",
+            "Urgency ": "={{ $('Parse AI Flags').first().json.urgency }}",
+            "Status": "New"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "From",
+              "displayName": "From",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Subject",
+              "displayName": "Subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Snippet",
+              "displayName": "Snippet",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Urgency ",
+              "displayName": "Urgency ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "useAppend": false
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2656,
+        -256
+      ],
+      "id": "ebf135a7-b805-45e9-94da-02e7ccd38553",
+      "name": "Log New Lead to DB",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "name": "Google Sheets account 8"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Routes email to 4 branches: reply, meeting, lead, fallback\n"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        832,
+        -432
+      ],
+      "typeVersion": 1,
+      "id": "acd0e9fa-3f85-4958-a4ef-b16ac8cb4afb",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "\nАГЕНТ 1: Классификатор\nМодель: OpenRouter\nФлаги: needs_reply, is_meeting, \nis_new_lead, urgency\nДетали встречи: title, date, time, duration\nТемпература: 0.1 (детерминированный)"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        128,
+        -400
+      ],
+      "typeVersion": 1,
+      "id": "44cf522e-31de-4562-a484-a9f668b17102",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "АГЕНТ 2: Генератор черновика\nИнструмент: Google Sheets (Projects DB)\nКонтекст: читает данные клиента по email\nЯзык: определяет автоматически\nСрочность: меняет тон ответа",
+        "height": 192
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1248,
+        -288
+      ],
+      "typeVersion": 1,
+      "id": "da11278f-75d9-4cbc-aa86-ebbe0019230f",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "АГЕНТ 3: Ответ новому лиду\nПерсонализирует ответ по тексту письма\nЯзык: определяет автоматически\nПосле: сохраняет черновик в Gmail + \nлогирует лида в Google Sheets (New Leads)",
+        "height": 208,
+        "width": 256
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1792,
+        -464
+      ],
+      "typeVersion": 1,
+      "id": "d6c6825a-bfaa-4e58-a7ee-be67c4f1a047",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "Ilona Bila 270426\n📧 EMAIL АССИСТЕНТ ФРИЛАНСЕРА\nВерсия: 1.0 | Модель: OpenRouter\n\nОПИСАНИЕ:\nАвтоматически обрабатывает входящие письма Gmail.\nКлассифицирует по 4 флагам и направляет по веткам.\n\nВЕТКИ:\n→ reply — создаёт черновик ответа через AI\n→ meeting — создаёт событие в Google Calendar + Черновик подтверждения встречи.\n→ lead — логирует в Sheets + черновик ответа\n→ fallback — игнорирует без действий\n\nИНСТРУМЕНТЫ:\n- Google Sheets (Projects) — контекст проектов для Agent 2\n- Google Sheets (Leads) — логирование новых лидов\n- Telegram — алерты срочных писем\n- Calendly — бронирование встреч\n",
+        "height": 496,
+        "width": 784,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1008,
+        -896
+      ],
+      "typeVersion": 1,
+      "id": "9c64c537-86f4-4f47-b134-769e11c62d7c",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "Черновик подтверждения встречи.\nОтправляется клиенту после создания события в Calendar.\nСодержит: дату, время встречи из письма.\nТребует ручной проверки перед отправкой.\n\n⚠️ ВАЖНО: Перед отправкой проверить конфликт в Calendar.\nЕсли время занято — удалить черновик и ответить вручную.\n\nV2: Добавить автоматическую проверку доступности \nчерез Google Calendar Get Events перед созданием события.",
+        "height": 272,
+        "width": 368
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2128,
+        -864
+      ],
+      "id": "45be5d07-784f-432f-80e5-c6d987536621",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "Черновик с ссылкой на Calendly.\nОтправляется когда дата/время встречи не указаны в письме.\nКлиент сам выбирает удобное время через Calendly.\nCalendly автоматически добавляет событие в Google Calendar\nи отправляет подтверждение обеим сторонам.\n\n⚠️ Заменить ссылку на актуальный Calendly URL \nперед активацией воркфлоу.",
+        "height": 224,
+        "width": 288
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2336,
+        -496
+      ],
+      "id": "19709718-c20e-4293-b213-d3b0e17d4c54",
+      "name": "Sticky Note6"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Classify Email",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Write Reply Draft",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Write Lead Reply",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Trigger Receive Email": {
+      "main": [
+        [
+          {
+            "node": "Format Email Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Email Data": {
+      "main": [
+        [
+          {
+            "node": "Classify Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Email": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Flags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Flags": {
+      "main": [
+        [
+          {
+            "node": "Route by Type",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Check Urgency",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Type": {
+      "main": [
+        [
+          {
+            "node": "Check Meeting Ready",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Write Lead Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Write Reply Draft",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignore Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Reply Draft": {
+      "main": [
+        [
+          {
+            "node": "Save Reply Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Meeting Ready": {
+      "main": [
+        [
+          {
+            "node": "Create Calendar Event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Calendly Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Calendar Event": {
+      "main": [
+        [
+          {
+            "node": "Save Meeting Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Lead Reply": {
+      "main": [
+        [
+          {
+            "node": "Save Lead Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Lead Draft": {
+      "main": [
+        [
+          {
+            "node": "Log New Lead to DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Urgency": {
+      "main": [
+        [
+          {
+            "node": "Alert Urgent Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Client Projects DB": {
+      "ai_tool": [
+        [
+          {
+            "node": "Write Reply Draft",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "timezone": "Europe/Berlin",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "meta": {},
+  "tags": []
+}
